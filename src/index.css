@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", serif;
+  --font-body: "Work Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+--color-void: #050605;
+  --color-surface: #0d0f0d;
+  --color-surface-light: #171a17;
+  --color-sage: #9bc1a6;
+  --color-sage-light: #b9d6c0;
+  --color-cream: #edede3;
+  --color-ember: #e2624b;
+  --color-success: #6fbf8c;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-void);
+  color: var(--color-cream);
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-xl border border-sage/10 shadow-lg shadow-black/30;
+  }
+  .btn-primary {
+    @apply bg-sage text-void font-medium px-4 py-2 rounded-lg hover:bg-sage-light transition-colors;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-sage border border-sage/30 font-medium px-4 py-2 rounded-lg hover:bg-sage/10 transition-colors;
+  }
+  .badge-alert {
+    @apply inline-flex items-center gap-1 text-xs font-medium text-ember bg-ember/10 px-2 py-0.5 rounded-full border border-ember/20;
+  }
+  .nav-tab {
+    @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors;
+  }
+  .nav-tab-active {
+    @apply bg-sage text-void;
+  }
+  .nav-tab-inactive {
+    @apply text-cream/50 hover:bg-sage/10 hover:text-cream;
+  }
+  .input-field {
+    @apply w-full bg-void/40 border border-sage/20 rounded-lg px-3 py-2 text-cream placeholder-cream/30 focus:outline-none focus:ring-2 focus:ring-sage/40;
+  }
+}
