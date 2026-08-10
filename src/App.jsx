@@ -91,7 +91,7 @@ function App() {
       </header>
 
       <div className="max-w-6xl mx-auto px-6 py-6">
-        <nav className="flex gap-2 mb-8">
+      <nav className="flex gap-2 mb-8 overflow-x-auto pb-1">
           {TABS.map((t) => {
             const Icon = t.icon
             return (

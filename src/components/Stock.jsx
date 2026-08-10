@@ -149,7 +149,7 @@ export default function Stock() {
       ) : productos.length === 0 ? (
         <p className="text-cream/40">No hay productos cargados todavía.</p>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-surface-light text-xs uppercase tracking-wide text-cream/40">
               <tr>

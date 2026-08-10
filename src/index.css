@@ -19,6 +19,7 @@ body {
   font-family: var(--font-body);
   background-color: var(--color-void);
   color: var(--color-cream);
+  overflow-x: hidden;
 }
 
 @layer components {
