@@ -81,42 +81,42 @@ export default function TurnoFantasma() {
     cargarTurnos()
   }
 
-  const finalizarTurno = async (turno) => {
-    const horaFin = new Date()
-    const horaInicio = new Date(turno.hora_inicio)
-    const duracionMinutos = Math.round((horaFin - horaInicio) / 60000)
+const finalizarTurno = async (turno) => {
+  setError('')
+  const { error: errorRpc } = await supabase.rpc('finalizar_turno_fantasma', {
+    turno_id: turno.id,
+  })
 
-    const { error } = await supabase
-      .from('turnos_fantasma')
-      .update({
-        estado: 'finalizado',
-        hora_fin: horaFin.toISOString(),
-        duracion_minutos: duracionMinutos,
-      })
-      .eq('id', turno.id)
+  if (errorRpc) {
+    setError('No se pudo finalizar el turno: ' + errorRpc.message)
+    return
+  }
 
-    if (error) {
-      setError(error.message)
-      return
-    }
+  const { data: { user } } = await supabase.auth.getUser()
 
-    const { data: { user } } = await supabase.auth.getUser()
+  const { data: turnoActualizado } = await supabase
+    .from('turnos_fantasma')
+    .select('hora_inicio, hora_fin, duracion_minutos')
+    .eq('id', turno.id)
+    .single()
 
+  if (turnoActualizado) {
     await supabase.from('asistencias').insert({
       empleado_id: user.id,
       tipo: 'fantasma',
       fecha: new Date().toISOString().slice(0, 10),
-      hora_inicio: turno.hora_inicio,
-      hora_fin: horaFin.toISOString(),
-      duracion_minutos: duracionMinutos,
+      hora_inicio: turnoActualizado.hora_inicio,
+      hora_fin: turnoActualizado.hora_fin,
+      duracion_minutos: turnoActualizado.duracion_minutos,
     })
 
     const nombre = user.user_metadata?.nombre || user.email
     const msg = await verificarLogroDiasTrabajados(user.id, nombre)
     if (msg) setLogroMensaje(msg)
-
-    cargarTurnos()
   }
+
+  cargarTurnos()
+}
 
   return (
     <div>

@@ -57,23 +57,29 @@ export default function Notificaciones() {
       </button>
 
       {abierto && (
-        <div className="absolute right-0 mt-2 w-80 card z-10 max-h-96 overflow-y-auto">
-          {notificaciones.length === 0 ? (
-            <p className="p-4 text-sm text-cream/40">No hay notificaciones.</p>
-          ) : (
-            notificaciones.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => marcarLeida(n.id)}
-                className={`p-3 border-b border-sage/10 text-sm cursor-pointer ${
-                  n.leida ? 'text-cream/40' : 'font-medium bg-sage/5 text-cream'
-                }`}
-              >
-                {n.mensaje}
-              </div>
-            ))
-          )}
-        </div>
+        <>
+          <div
+            className="fixed inset-0 z-40 md:hidden"
+            onClick={() => setAbierto(false)}
+          />
+          <div className="fixed left-4 right-4 top-20 z-50 card max-h-[70vh] overflow-y-auto md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-80 md:inset-x-auto">
+            {notificaciones.length === 0 ? (
+              <p className="p-4 text-sm text-cream/40">No hay notificaciones.</p>
+            ) : (
+              notificaciones.map((n) => (
+                <div
+                  key={n.id}
+                  onClick={() => marcarLeida(n.id)}
+                  className={`p-3 border-b border-sage/10 text-sm cursor-pointer break-words ${
+                    n.leida ? 'text-cream/40' : 'font-medium bg-sage/5 text-cream'
+                  }`}
+                >
+                  {n.mensaje}
+                </div>
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   )

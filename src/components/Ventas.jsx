@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ShoppingCart } from 'lucide-react'
+import { ShoppingCart, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import LogroModal from './LogroModal'
 
@@ -13,6 +13,9 @@ export default function Ventas() {
   const [error, setError] = useState('')
   const [mensajeExito, setMensajeExito] = useState('')
   const [logroMensaje, setLogroMensaje] = useState('')
+  const [busqueda, setBusqueda] = useState('')
+  const [categoriaFiltro, setCategoriaFiltro] = useState('')
+  const [metodoPago, setMetodoPago] = useState('')
 
   const cargarProductos = async () => {
     setCargando(true)
@@ -29,6 +32,16 @@ export default function Ventas() {
   useEffect(() => {
     cargarProductos()
   }, [])
+
+  const categorias = Array.from(
+    new Set(productos.map((p) => p.categoria).filter(Boolean))
+  ).sort()
+
+  const productosFiltrados = productos.filter((p) => {
+    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const coincideCategoria = !categoriaFiltro || p.categoria === categoriaFiltro
+    return coincideBusqueda && coincideCategoria
+  })
 
   const agregarAlCarrito = (producto) => {
     setCarrito((prev) => {
@@ -78,7 +91,6 @@ export default function Ventas() {
     if (!ventasHoy) return
 
     const totalHoy = ventasHoy.reduce((acc, v) => acc + Number(v.total), 0)
-
     const alcanzados = UMBRALES_VENTA.filter((u) => totalHoy >= u)
     if (alcanzados.length === 0) return
     const mayorAlcanzado = Math.max(...alcanzados)
@@ -107,7 +119,7 @@ export default function Ventas() {
   }
 
   const confirmarVenta = async () => {
-    if (carrito.length === 0) return
+    if (carrito.length === 0 || !metodoPago) return
     setProcesando(true)
     setError('')
     setMensajeExito('')
@@ -116,7 +128,7 @@ export default function Ventas() {
 
     const { data: venta, error: errorVenta } = await supabase
       .from('ventas')
-      .insert({ vendedor_id: user.id, total })
+      .insert({ vendedor_id: user.id, total, metodo_pago: metodoPago })
       .select()
       .single()
 
@@ -154,13 +166,14 @@ export default function Ventas() {
 
     setMensajeExito('Venta registrada correctamente.')
     setCarrito([])
+    setMetodoPago('')
     cargarProductos()
     setProcesando(false)
   }
 
   return (
     <div>
-      <h2 className="font-display text-2xl flex items-center gap-2 mb-6 text-cream">
+      <h2 className="font-display text-2xl flex items-center gap-2 mb-4 text-cream">
         <ShoppingCart size={22} className="text-sage" /> Registrar venta
       </h2>
 
@@ -169,17 +182,54 @@ export default function Ventas() {
 
       <div className="grid md:grid-cols-2 gap-6">
         <div>
-          <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide">
-            Productos
-          </h3>
+          <div className="mb-3 space-y-3">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/40" />
+              <input
+                type="text"
+                placeholder="Buscar producto..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="input-field pl-9"
+              />
+            </div>
+            {categorias.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setCategoriaFiltro('')}
+                  className={`shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
+                    categoriaFiltro === ''
+                      ? 'bg-sage text-void border-sage'
+                      : 'text-cream/60 border-sage/20 hover:bg-sage/10'
+                  }`}
+                >
+                  Todas
+                </button>
+                {categorias.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCategoriaFiltro(c)}
+                    className={`shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
+                      categoriaFiltro === c
+                        ? 'bg-sage text-void border-sage'
+                        : 'text-cream/60 border-sage/20 hover:bg-sage/10'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {cargando ? (
             <p className="text-cream/40">Cargando...</p>
           ) : (
             <div className="card divide-y divide-sage/10">
-              {productos.map((p) => (
+              {productosFiltrados.map((p) => (
                 <div key={p.id} className="flex justify-between items-center px-4 py-3">
-                  <div>
-                    <p className="font-medium text-cream">{p.nombre}</p>
+                  <div className="min-w-0">
+                    <p className="font-medium text-cream truncate">{p.nombre}</p>
                     <p className="text-sm text-cream/50 font-mono">
                       ${p.precio} — Stock: {p.stock_actual}
                     </p>
@@ -187,7 +237,7 @@ export default function Ventas() {
                   <button
                     onClick={() => agregarAlCarrito(p)}
                     disabled={p.stock_actual <= 0}
-                    className="bg-sage/15 text-sage px-3 py-1 rounded-lg text-sm hover:bg-sage/25 disabled:opacity-30"
+                    className="bg-sage/15 text-sage px-3 py-1 rounded-lg text-sm hover:bg-sage/25 disabled:opacity-30 shrink-0 ml-2"
                   >
                     Agregar
                   </button>
@@ -238,13 +288,39 @@ export default function Ventas() {
                     </div>
                   ))}
                 </div>
+
                 <div className="flex justify-between items-center mt-4 pt-4 border-t border-sage/10 font-bold text-cream">
                   <span>Total</span>
                   <span className="font-mono">${total.toFixed(2)}</span>
                 </div>
+
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-cream/60 mb-2">Método de pago</p>
+                  <div className="flex gap-2">
+                    {[
+                      { valor: 'efectivo', label: 'Efectivo' },
+                      { valor: 'transferencia', label: 'Transferencia' },
+                      { valor: 'anotacion', label: 'Anotación' },
+                    ].map((op) => (
+                      <button
+                        key={op.valor}
+                        type="button"
+                        onClick={() => setMetodoPago(op.valor)}
+                        className={`flex-1 px-2 py-2 rounded-lg text-sm border transition-colors ${
+                          metodoPago === op.valor
+                            ? 'bg-sage text-void border-sage'
+                            : 'text-cream/60 border-sage/20 hover:bg-sage/10'
+                        }`}
+                      >
+                        {op.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <button
                   onClick={confirmarVenta}
-                  disabled={procesando}
+                  disabled={procesando || !metodoPago}
                   className="btn-primary w-full mt-4 disabled:opacity-50"
                 >
                   {procesando ? 'Procesando...' : 'Confirmar venta'}

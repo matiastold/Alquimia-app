@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Package } from 'lucide-react'
+import { Package, Search } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Stock() {
@@ -7,11 +7,14 @@ export default function Stock() {
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [nombre, setNombre] = useState('')
+  const [categoria, setCategoria] = useState('')
   const [precioCompra, setPrecioCompra] = useState('')
   const [precio, setPrecio] = useState('')
   const [stockActual, setStockActual] = useState('')
   const [stockMinimo, setStockMinimo] = useState('5')
   const [error, setError] = useState('')
+  const [busqueda, setBusqueda] = useState('')
+  const [categoriaFiltro, setCategoriaFiltro] = useState('')
 
   const cargarProductos = async () => {
     setCargando(true)
@@ -35,6 +38,7 @@ export default function Stock() {
 
     const { error } = await supabase.from('productos').insert({
       nombre,
+      categoria: categoria || null,
       precio_compra: precioCompra ? parseFloat(precioCompra) : null,
       precio: parseFloat(precio),
       stock_actual: parseInt(stockActual, 10),
@@ -47,6 +51,7 @@ export default function Stock() {
     }
 
     setNombre('')
+    setCategoria('')
     setPrecioCompra('')
     setPrecio('')
     setStockActual('')
@@ -68,14 +73,24 @@ export default function Stock() {
     else cargarProductos()
   }
 
+  const categorias = Array.from(
+    new Set(productos.map((p) => p.categoria).filter(Boolean))
+  ).sort()
+
+  const productosFiltrados = productos.filter((p) => {
+    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const coincideCategoria = !categoriaFiltro || p.categoria === categoriaFiltro
+    return coincideBusqueda && coincideCategoria
+  })
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4">
         <h2 className="font-display text-2xl flex items-center gap-2 text-cream">
           <Package size={22} className="text-sage" /> Stock
         </h2>
         <button onClick={() => setMostrarForm(!mostrarForm)} className="btn-primary">
-          {mostrarForm ? 'Cancelar' : '+ Nuevo producto'}
+          {mostrarForm ? 'Cancelar' : '+ Nuevo'}
         </button>
       </div>
 
@@ -92,6 +107,24 @@ export default function Stock() {
               required
               className="input-field"
             />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-cream/60 mb-1">
+              Categoría (opcional)
+            </label>
+            <input
+              type="text"
+              list="lista-categorias"
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              placeholder="Ej: Librería"
+              className="input-field"
+            />
+            <datalist id="lista-categorias">
+              {categorias.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="block text-sm font-medium text-cream/60 mb-1">
@@ -144,62 +177,99 @@ export default function Stock() {
         </form>
       )}
 
+      <div className="mb-4 space-y-3">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-cream/40" />
+          <input
+            type="text"
+            placeholder="Buscar producto..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            className="input-field pl-9"
+          />
+        </div>
+
+        {categorias.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setCategoriaFiltro('')}
+              className={`shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
+                categoriaFiltro === ''
+                  ? 'bg-sage text-void border-sage'
+                  : 'text-cream/60 border-sage/20 hover:bg-sage/10'
+              }`}
+            >
+              Todas
+            </button>
+            {categorias.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategoriaFiltro(c)}
+                className={`shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
+                  categoriaFiltro === c
+                    ? 'bg-sage text-void border-sage'
+                    : 'text-cream/60 border-sage/20 hover:bg-sage/10'
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {cargando ? (
         <p className="text-cream/40">Cargando productos...</p>
-      ) : productos.length === 0 ? (
-        <p className="text-cream/40">No hay productos cargados todavía.</p>
+      ) : productosFiltrados.length === 0 ? (
+        <p className="text-cream/40">No se encontraron productos.</p>
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-surface-light text-xs uppercase tracking-wide text-cream/40">
-              <tr>
-                <th className="px-5 py-3 font-medium">Producto</th>
-                <th className="px-5 py-3 font-medium">Precio venta</th>
-                <th className="px-5 py-3 font-medium">Ganancia u.</th>
-                <th className="px-5 py-3 font-medium">Stock</th>
-                <th className="px-5 py-3 font-medium">Ajustar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sage/10">
-              {productos.map((p) => {
-                const bajo = p.stock_actual <= p.stock_minimo
-                const ganancia = p.precio_compra ? p.precio - p.precio_compra : null
-                return (
-                  <tr key={p.id}>
-                    <td className="px-5 py-3">
-                      <span className="font-medium text-cream">{p.nombre}</span>
-                      {bajo && <span className="badge-alert ml-2">Stock bajo</span>}
-                    </td>
-                    <td className="px-5 py-3 font-mono text-cream/70">${p.precio}</td>
-                    <td className="px-5 py-3 font-mono text-cream/70">
-                      {ganancia !== null ? `$${ganancia.toFixed(2)}` : '—'}
-                    </td>
-                    <td
-                      className={`px-5 py-3 font-mono font-semibold ${
-                        bajo ? 'text-ember' : 'text-cream'
-                      }`}
+        <div className="space-y-3">
+          {productosFiltrados.map((p) => {
+            const bajo = p.stock_actual <= p.stock_minimo
+            const ganancia = p.precio_compra ? p.precio - p.precio_compra : null
+            return (
+              <div key={p.id} className="card p-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-medium text-cream truncate">{p.nombre}</p>
+                    {bajo && <span className="badge-alert">Stock bajo</span>}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-xs flex-wrap">
+                    {p.categoria && (
+                      <span className="bg-sage/10 text-sage px-2 py-0.5 rounded-full">
+                        {p.categoria}
+                      </span>
+                    )}
+                    <span className="font-mono text-cream/60">${p.precio}</span>
+                    {ganancia !== null && (
+                      <span className="font-mono text-cream/40">gan. ${ganancia.toFixed(2)}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span
+                    className={`font-mono font-semibold ${bajo ? 'text-ember' : 'text-cream'}`}
+                  >
+                    {p.stock_actual}
+                  </span>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => ajustarStock(p, -1)}
+                      className="w-7 h-7 rounded-full border border-sage/20 text-cream/70 hover:bg-sage/10"
                     >
-                      {p.stock_actual}
-                    </td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => ajustarStock(p, -1)}
-                        className="w-7 h-7 rounded-full border border-sage/20 text-cream/70 hover:bg-sage/10 mr-2"
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => ajustarStock(p, 1)}
-                        className="w-7 h-7 rounded-full border border-sage/20 text-cream/70 hover:bg-sage/10"
-                      >
-                        +
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      −
+                    </button>
+                    <button
+                      onClick={() => ajustarStock(p, 1)}
+                      className="w-7 h-7 rounded-full border border-sage/20 text-cream/70 hover:bg-sage/10"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
