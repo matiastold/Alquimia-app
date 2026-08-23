@@ -1,207 +1,241 @@
 import { useState, useEffect } from 'react'
-import { Play, Square, Clock, Calendar, CheckCircle2, User } from 'lucide-react'
+import { Calendar, Plus, Trash2, Clock, User, AlertCircle, Check } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
-// Horarios fijos de referencia (Guía visual)
-const HORARIOS_REFERENCIA = [
-  { dia: 'Lunes', empleado: 'Matías Toledo', horario: '09:00 - 13:00 hs' },
-  { dia: 'Lunes', empleado: 'Ariel', horario: '18:00 - 22:00 hs' },
-  { dia: 'Martes', empleado: 'Ariel', horario: '09:15 - 13:15 hs' },
-  { dia: 'Martes', empleado: 'Zoe', horario: '18:00 - 22:30 hs' },
-  { dia: 'Miércoles', empleado: 'Matías Toledo', horario: '09:00 - 13:00 hs' },
-  { dia: 'Jueves', empleado: 'Ariel', horario: '09:15 - 13:15 hs' },
-  { dia: 'Jueves', empleado: 'Zoe', horario: '18:00 - 22:30 hs' },
-]
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 export default function Turnos() {
-  const [usuario, setUsuario] = useState(null)
-  const [turnoActivo, setTurnoActivo] = useState(null)
-  const [segundos, setSegundos] = useState(0)
+  const [turnos, setTurnos] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [resumenUltimoTurno, setResumenUltimoTurno] = useState(null)
+  const [mostrarForm, setMostrarForm] = useState(false)
+  
+  // Campos del nuevo turno
+  const [dia, setDia] = useState('Viernes')
+  const [horaInicio, setHoraInicio] = useState('08:00')
+  const [horaFin, setHoraFin] = useState('16:00')
+  const [empleado, setEmpleado] = useState('')
+  const [notas, setNotas] = useState('')
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    comprobarEstadoTurno()
-  }, [])
-
-  // Cronómetro dinámico
-  useEffect(() => {
-    let intervalo = null
-    if (turnoActivo) {
-      intervalo = setInterval(() => {
-        const inicio = new Date(turnoActivo.hora_inicio).getTime()
-        const ahora = new Date().getTime()
-        setSegundos(Math.floor((ahora - inicio) / 1000))
-      }, 1000)
-    } else {
-      setSegundos(0)
-    }
-    return () => clearInterval(intervalo)
-  }, [turnoActivo])
-
-  const comprobarEstadoTurno = async () => {
+  const cargarTurnos = async () => {
     setCargando(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    setUsuario(user)
-
-    const { data } = await supabase
-      .from('registro_turnos')
+    const { data, error } = await supabase
+      .from('turnos')
       .select('*')
-      .eq('empleado_id', user.id)
-      .eq('estado', 'en_curso')
-      .maybeSingle()
+      .order('id', { ascending: true })
 
-    if (data) {
-      setTurnoActivo(data)
-    }
+    if (!error) setTurnos(data || [])
     setCargando(false)
   }
 
-  const iniciarTurno = async () => {
-    if (!usuario) return
-    const nombre = usuario.user_metadata?.nombre || usuario.email.split('@')[0]
-    const horaInicio = new Date().toISOString()
+  useEffect(() => {
+    cargarTurnos()
+  }, [])
 
-    const { data, error } = await supabase
-      .from('registro_turnos')
-      .insert([
-        {
-          empleado_id: usuario.id,
-          nombre_empleado: nombre,
-          hora_inicio: horaInicio,
-          estado: 'en_curso'
-        }
-      ])
-      .select()
-      .single()
+  // Crear un nuevo turno
+  const handleCrearTurno = async (e) => {
+    e.preventDefault()
+    setError('')
 
-    if (!error && data) {
-      setTurnoActivo(data)
-      setResumenUltimoTurno(null)
+    const { error } = await supabase.from('turnos').insert({
+      dia,
+      hora_inicio: horaInicio,
+      hora_fin: horaFin,
+      empleado: empleado.trim() || 'Sin Asignar',
+      notas: notas.trim() || null,
+    })
+
+    if (error) {
+      setError(error.message)
+      return
     }
+
+    // Limpiar campos
+    setEmpleado('')
+    setNotas('')
+    setMostrarForm(false)
+    cargarTurnos()
   }
 
-  const finalizarTurno = async () => {
-    if (!turnoActivo) return
-    const horaFin = new Date().toISOString()
-    const inicioMs = new Date(turnoActivo.hora_inicio).getTime()
-    const duracionSeg = Math.floor((new Date().getTime() - inicioMs) / 1000)
+  // Eliminar un turno existente
+  const handleEliminarTurno = async (id) => {
+    const confirmacion = window.confirm('¿Seguro que deseas eliminar este turno?')
+    if (!confirmacion) return
 
-    const { error } = await supabase
-      .from('registro_turnos')
-      .update({
-        hora_fin: horaFin,
-        duracion_segundos: duracionSeg,
-        estado: 'finalizado'
-      })
-      .eq('id', turnoActivo.id)
+    const { error } = await supabase.from('turnos').delete().eq('id', id)
 
-    if (!error) {
-      setResumenUltimoTurno({
-        inicio: new Date(turnoActivo.hora_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        fin: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        duracion: formatearTiempo(duracionSeg),
-        fecha: new Date().toLocaleDateString()
-      })
-      setTurnoActivo(null)
+    if (error) {
+      alert('Error al eliminar el turno: ' + error.message)
+    } else {
+      cargarTurnos()
     }
-  }
-
-  const formatearTiempo = (totalSegundos) => {
-    const hrs = Math.floor(totalSegundos / 3600)
-    const mins = Math.floor((totalSegundos % 3600) / 60)
-    const segs = totalSegundos % 60
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${segs.toString().padStart(2, '0')}`
-  }
-
-  if (cargando) {
-    return (
-      <div className="p-8 text-center text-slate-400 font-mono text-xs">
-        Cargando cronómetro de turnos...
-      </div>
-    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* SECCIÓN CRONÓMETRO DE TURNO */}
-      <div className="bg-slate-900/90 border border-slate-800 p-6 rounded-3xl shadow-xl text-center relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="flex items-center justify-center gap-2 mb-2 text-slate-400">
-          <Clock size={18} className="text-emerald-400" />
-          <span className="text-xs font-semibold tracking-wider uppercase font-mono">
-            Control de Jornada en Tiempo Real
-          </span>
+    <div className="space-y-6 pb-20 lg:pb-6">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
+            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+              <Calendar size={22} />
+            </div>
+            Gestión de Turnos
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Planificación semanal de horarios para el personal
+          </p>
         </div>
 
-        {/* DISPLAY DEL TIEMPO */}
-        <div className="my-4">
-          <span className="font-mono text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-100">
-            {formatearTiempo(segundos)}
-          </span>
-        </div>
+        <button
+          onClick={() => setMostrarForm(!mostrarForm)}
+          className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs transition-all shadow-lg active:scale-[0.98] ${
+            mostrarForm
+              ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+              : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20'
+          }`}
+        >
+          <Plus size={16} />
+          {mostrarForm ? 'Cancelar' : 'Nuevo Turno'}
+        </button>
+      </div>
 
-        {/* ACCIONES */}
-        {!turnoActivo ? (
-          <button
-            onClick={iniciarTurno}
-            className="w-full sm:w-auto px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all text-xs active:scale-95 flex items-center justify-center gap-2 mx-auto"
-          >
-            <Play size={18} fill="currentColor" /> Iniciar Mi Turno
+      {/* FORMULARIO CREAR TURNO */}
+      {mostrarForm && (
+        <form onSubmit={handleCrearTurno} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
+          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <Plus size={14} className="text-emerald-400" /> Asignar Nuevo Horario
+          </h3>
+
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs flex items-center gap-2">
+              <AlertCircle size={14} /> {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Día de la semana</label>
+              <select
+                value={dia}
+                onChange={(e) => setDia(e.target.value)}
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              >
+                {DIAS_SEMANA.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Empleado / Encargado</label>
+              <input
+                type="text"
+                required
+                value={empleado}
+                onChange={(e) => setEmpleado(e.target.value)}
+                placeholder="Nombre del empleado..."
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Hora Inicio</label>
+              <input
+                type="time"
+                required
+                value={horaInicio}
+                onChange={(e) => setHoraInicio(e.target.value)}
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Hora Fin</label>
+              <input
+                type="time"
+                required
+                value={horaFin}
+                onChange={(e) => setHoraFin(e.target.value)}
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Notas adicionales (Opcional)</label>
+              <input
+                type="text"
+                value={notas}
+                onChange={(e) => setNotas(e.target.value)}
+                placeholder="Ej. Relevo de caja / Apertura de local"
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+
+          <button type="submit" className="w-full py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/10">
+            Guardar Turno
           </button>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-emerald-400 font-medium animate-pulse">
-              ● Turno iniciado a las {new Date(turnoActivo.hora_inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} hs
-            </p>
-            <button
-              onClick={finalizarTurno}
-              className="w-full sm:w-auto px-8 py-3.5 bg-rose-500 hover:bg-rose-400 text-white font-extrabold rounded-2xl shadow-lg shadow-rose-500/20 transition-all text-xs active:scale-95 flex items-center justify-center gap-2 mx-auto"
-            >
-              <Square size={18} fill="currentColor" /> Finalizar y Registrar Turno
-            </button>
-          </div>
-        )}
+        </form>
+      )}
 
-        {/* TARJETA RESUMEN POST-TURNO */}
-        {resumenUltimoTurno && (
-          <div className="mt-5 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-left text-xs space-y-1">
-            <div className="flex items-center gap-1.5 text-emerald-400 font-bold mb-1">
-              <CheckCircle2 size={16} /> ¡Turno Guardado Correctamente!
-            </div>
-            <p className="text-slate-300"><b>Fecha:</b> {resumenUltimoTurno.fecha}</p>
-            <p className="text-slate-300"><b>Horario real:</b> {resumenUltimoTurno.inicio} hs a {resumenUltimoTurno.fin} hs</p>
-            <p className="text-slate-300"><b>Tiempo total trabajado:</b> {resumenUltimoTurno.duracion}</p>
-          </div>
-        )}
-      </div>
+      {/* VISTA ORGANIZADA POR DÍAS (LUNES A DOMINGO) */}
+      {cargando ? (
+        <div className="p-8 text-center text-slate-500 text-xs font-mono">Cargando cronograma de turnos...</div>
+      ) : (
+        <div className="space-y-4">
+          {DIAS_SEMANA.map((diaNombre) => {
+            const turnosDelDia = turnos.filter((t) => t.dia === diaNombre)
 
-      {/* HORARIOS FIJOS DE REFERENCIA */}
-      <div className="bg-slate-900/60 border border-slate-800/80 p-5 rounded-3xl space-y-4">
-        <div className="flex items-center gap-2">
-          <Calendar size={18} className="text-emerald-400" />
-          <h3 className="text-sm font-bold text-slate-200">Horarios Fijos de Referencia</h3>
-        </div>
-
-        <div className="divide-y divide-slate-800/60">
-          {HORARIOS_REFERENCIA.map((item, index) => (
-            <div key={index} className="py-2.5 flex items-center justify-between text-xs">
-              <div className="space-y-0.5">
-                <span className="font-bold text-slate-200">{item.dia}</span>
-                <div className="flex items-center gap-1 text-slate-400">
-                  <User size={12} /> {item.empleado}
+            return (
+              <div key={diaNombre} className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
+                  <h4 className="font-extrabold text-emerald-400 text-sm tracking-wide">{diaNombre}</h4>
+                  <span className="text-[10px] font-mono text-slate-500 uppercase bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                    {turnosDelDia.length} {turnosDelDia.length === 1 ? 'Turno' : 'Turnos'}
+                  </span>
                 </div>
+
+                {turnosDelDia.length === 0 ? (
+                  <p className="text-xs text-slate-600 italic py-1">Sin turnos asignados para este día.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {turnosDelDia.map((t) => (
+                      <div
+                        key={t.id}
+                        className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex justify-between items-center gap-2"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                            <User size={13} className="text-emerald-400" />
+                            <span>{t.empleado}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+                            <Clock size={12} className="text-slate-500" />
+                            <span>{t.hora_inicio} hs - {t.hora_fin} hs</span>
+                          </div>
+                          {t.notas && (
+                            <p className="text-[10px] text-slate-500 italic mt-0.5">{t.notas}</p>
+                          )}
+                        </div>
+
+                        {/* BOTÓN ELIMINAR TURNO */}
+                        <button
+                          onClick={() => handleEliminarTurno(t.id)}
+                          className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
+                          title="Eliminar turno"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <span className="font-mono bg-slate-800/80 px-2.5 py-1 rounded-xl text-emerald-400 font-semibold border border-slate-700/50">
-                {item.horario}
-              </span>
-            </div>
-          ))}
+            )
+          })}
         </div>
-      </div>
+      )}
     </div>
   )
 }
