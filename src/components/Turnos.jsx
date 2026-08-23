@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CalendarClock, Trash2 } from 'lucide-react'
+import { CalendarClock, Trash2, Plus, X, Clock, CheckCircle2, AlertCircle, Calendar } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { verificarLogroDiasTrabajados } from '../lib/logros'
 import LogroModal from './LogroModal'
@@ -33,7 +33,7 @@ export default function Turnos() {
   const [logroMensaje, setLogroMensaje] = useState('')
   const [usuarioActual, setUsuarioActual] = useState(null)
 
-  // Turnos por día (nuevo)
+  // Turnos por día
   const [turnosDia, setTurnosDia] = useState([])
   const [mostrarFormDia, setMostrarFormDia] = useState(false)
   const [empleadoIdDia, setEmpleadoIdDia] = useState('')
@@ -275,230 +275,356 @@ export default function Turnos() {
   }
 
   return (
-    <div>
+    <div className="space-y-8 pb-20 lg:pb-6">
+      {/* TARJETA DE MI TURNO HOY (ACCESO RÁPIDO PARA EL EMPLEADO) */}
       {misTurnosHoy.length > 0 && (
-        <div className="card p-5 mb-6 border-sage/30">
-          <p className="text-sm text-cream/50 uppercase tracking-wide mb-2">Tu turno de hoy</p>
-          {misTurnosHoy.map((t) => (
-            <p key={t.id} className="text-cream font-mono mb-2">
-              {t.hora_inicio} - {t.hora_fin}
-            </p>
-          ))}
-          {yaMarcadoHoy ? (
-            <p className="text-success text-sm">Ya marcaste este turno como cumplido hoy.</p>
-          ) : (
-            <button onClick={marcarCumplido} className="btn-primary">
-              Marcar turno cumplido hoy
-            </button>
-          )}
+        <div className="bg-gradient-to-r from-emerald-500/10 via-slate-800/80 to-slate-800/80 border border-emerald-500/30 rounded-3xl p-5 sm:p-6 shadow-xl backdrop-blur-xl">
+          <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs uppercase tracking-wider mb-2">
+            <Clock size={16} /> Tu Turno Fijo de Hoy
+          </div>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              {misTurnosHoy.map((t) => (
+                <p key={t.id} className="text-2xl font-mono font-bold text-slate-100">
+                  {t.hora_inicio} <span className="text-slate-500 text-lg">-</span> {t.hora_fin} hs
+                </p>
+              ))}
+              <p className="text-xs text-slate-400 mt-1">Registra tu cumplimiento diario para actualizar tu asistencia.</p>
+            </div>
+
+            {yaMarcadoHoy ? (
+              <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-emerald-400 font-bold text-xs">
+                <CheckCircle2 size={18} /> Turno marcado como cumplido
+              </div>
+            ) : (
+              <button
+                onClick={marcarCumplido}
+                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all"
+              >
+                Marcar Cumplido Hoy
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="font-display text-2xl flex items-center gap-2 text-cream">
-          <CalendarClock size={22} className="text-sage" /> Turnos
-        </h2>
-        <button onClick={() => setMostrarForm(!mostrarForm)} className="btn-primary">
-          {mostrarForm ? 'Cancelar' : '+ Asignar turno fijo'}
-        </button>
-      </div>
+      {/* MENSAJE DE ERROR GLOBAL */}
+      {error && (
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-medium flex items-center gap-2">
+          <AlertCircle size={16} className="shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-      {error && <p className="text-ember text-sm mb-4">{error}</p>}
-
-      {mostrarForm && (
-        <form onSubmit={handleSubmit} className="card p-6 mb-6 grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-cream/60 mb-1">Empleado</label>
-            <select
-              value={empleadoId}
-              onChange={(e) => setEmpleadoId(e.target.value)}
-              required
-              className="input-field"
-            >
-              <option value="">Seleccionar...</option>
-              {perfiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.nombre}</option>
-              ))}
-            </select>
+      {/* SECCIÓN 1: TURNOS FIJOS */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
+              <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
+                <CalendarClock size={20} />
+              </div>
+              Turnos Fijos Semanales
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">Horarios recurrentes por día de la semana para el personal regular</p>
           </div>
 
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-cream/60 mb-2">Días</label>
-            <div className="flex flex-wrap gap-2">
-              {DIAS.map((dia) => (
-                <button
-                  type="button"
-                  key={dia}
-                  onClick={() => toggleDia(dia)}
-                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${
-                    diasSeleccionados.includes(dia)
-                      ? 'bg-sage text-void border-sage'
-                      : 'bg-transparent text-cream/60 border-sage/20 hover:bg-sage/10'
-                  }`}
-                >
-                  {DIAS_LABEL[dia]}
-                </button>
-              ))}
+          <button
+            onClick={() => setMostrarForm(!mostrarForm)}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all shadow-md active:scale-[0.98] ${
+              mostrarForm
+                ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20'
+            }`}
+          >
+            {mostrarForm ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Asignar Turno Fijo</>}
+          </button>
+        </div>
+
+        {/* FORMULARIO TURNO FIJO */}
+        {mostrarForm && (
+          <form
+            onSubmit={handleSubmit}
+            className="bg-slate-800/80 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl space-y-4 animate-in fade-in duration-200"
+          >
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                Empleado
+              </label>
+              <select
+                value={empleadoId}
+                onChange={(e) => setEmpleadoId(e.target.value)}
+                required
+                className="w-full bg-slate-900/80 border border-slate-700/70 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+              >
+                <option value="">Seleccionar empleado...</option>
+                {perfiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Días Semanales
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {DIAS.map((dia) => {
+                  const selec = diasSeleccionados.includes(dia)
+                  return (
+                    <button
+                      type="button"
+                      key={dia}
+                      onClick={() => toggleDia(dia)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        selec
+                          ? 'bg-emerald-500 text-slate-950 font-bold shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-900/60 text-slate-400 border border-slate-700/60 hover:bg-slate-700/50'
+                      }`}
+                    >
+                      {DIAS_LABEL[dia]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Hora Inicio
+                </label>
+                <input
+                  type="time"
+                  value={horaInicio}
+                  onChange={(e) => setHoraInicio(e.target.value)}
+                  required
+                  className="w-full bg-slate-900/80 border border-slate-700/70 rounded-xl px-3.5 py-2.5 text-slate-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Hora Fin
+                </label>
+                <input
+                  type="time"
+                  value={horaFin}
+                  onChange={(e) => setHoraFin(e.target.value)}
+                  required
+                  className="w-full bg-slate-900/80 border border-slate-700/70 rounded-xl px-3.5 py-2.5 text-slate-100 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 active:scale-[0.98] transition-all mt-2"
+            >
+              Guardar Turno Fijo
+            </button>
+          </form>
+        )}
+
+        {/* LISTADO DE TURNOS FIJOS */}
+        {cargando ? (
+          <div className="text-center py-8 text-xs text-slate-400 font-medium">Cargando turnos fijos...</div>
+        ) : turnos.length === 0 ? (
+          <div className="bg-slate-800/20 border border-slate-700/30 rounded-2xl p-6 text-center text-xs text-slate-500">
+            No hay turnos fijos asignados aún.
+          </div>
+        ) : (
+          <div className="bg-slate-800/40 border border-slate-700/50 rounded-2xl overflow-hidden shadow-md backdrop-blur-md">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-900/60 border-b border-slate-700/50 text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+                  <tr>
+                    <th className="px-4 py-3">Día</th>
+                    <th className="px-4 py-3">Empleado</th>
+                    <th className="px-4 py-3">Horario</th>
+                    <th className="px-4 py-3 text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/40">
+                  {turnos.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-700/20 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-slate-200 text-xs">
+                        {DIAS_LABEL[t.dia_semana]}
+                      </td>
+                      <td className="px-4 py-3 text-slate-300 text-xs">
+                        {t.perfiles?.nombre || 'Sin nombre'}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-emerald-400 text-xs font-semibold">
+                        {t.hora_inicio} - {t.hora_fin}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => eliminarTurno(t.id)}
+                          className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-all"
+                          title="Eliminar turno"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-cream/60 mb-1">Hora inicio</label>
-            <input
-              type="time"
-              value={horaInicio}
-              onChange={(e) => setHoraInicio(e.target.value)}
-              required
-              className="input-field"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-cream/60 mb-1">Hora fin</label>
-            <input
-              type="time"
-              value={horaFin}
-              onChange={(e) => setHoraFin(e.target.value)}
-              required
-              className="input-field"
-            />
-          </div>
-          <div className="col-span-2">
-            <button type="submit" className="btn-primary">Guardar turno</button>
-          </div>
-        </form>
-      )}
-
-      {cargando ? (
-        <p className="text-cream/40">Cargando turnos...</p>
-      ) : turnos.length === 0 ? (
-        <p className="text-cream/40">No hay turnos fijos asignados todavía.</p>
-      ) : (
-        <div className="card overflow-x-auto mb-10">
-          <table className="w-full text-left">
-            <thead className="bg-surface-light text-xs uppercase tracking-wide text-cream/40">
-              <tr>
-                <th className="px-5 py-3 font-medium">Día</th>
-                <th className="px-5 py-3 font-medium">Empleado</th>
-                <th className="px-5 py-3 font-medium">Horario</th>
-                <th className="px-5 py-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-sage/10">
-              {turnos.map((t) => (
-                <tr key={t.id}>
-                  <td className="px-5 py-3 font-medium text-cream">{DIAS_LABEL[t.dia_semana]}</td>
-                  <td className="px-5 py-3 text-cream/80">{t.perfiles?.nombre || 'Sin nombre'}</td>
-                  <td className="px-5 py-3 font-mono text-cream/70">
-                    {t.hora_inicio} - {t.hora_fin}
-                  </td>
-                  <td className="px-5 py-3">
-                    <button onClick={() => eliminarTurno(t.id)} className="text-ember text-sm">
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-display text-xl text-cream">Turnos por día</h3>
-        <button onClick={() => setMostrarFormDia(!mostrarFormDia)} className="btn-primary">
-          {mostrarFormDia ? 'Cancelar' : '+ Asignar por día'}
-        </button>
+        )}
       </div>
 
-      <p className="text-cream/50 text-sm mb-4">
-        Para un día puntual (no recurrente). El empleado arranca y para el cronómetro con la hora
-        real, para un control exacto.
-      </p>
+      <hr className="border-slate-800" />
 
-      {mostrarFormDia && (
-        <form onSubmit={asignarTurnoDia} className="card p-6 mb-6 grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-cream/60 mb-1">Empleado</label>
-            <select
-              value={empleadoIdDia}
-              onChange={(e) => setEmpleadoIdDia(e.target.value)}
-              required
-              className="input-field"
-            >
-              <option value="">Seleccionar...</option>
-              {perfiles.map((p) => (
-                <option key={p.id} value={p.id}>{p.nombre}</option>
-              ))}
-            </select>
+      {/* SECCIÓN 2: TURNOS POR DÍA (CRONÓMETRO EXACTO) */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight text-slate-100 flex items-center gap-2">
+              <Calendar size={18} className="text-amber-400" /> Turnos Eventuales por Día
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Asignaciones puntuales no recurrentes con fichaje y cronómetro en tiempo real.
+            </p>
           </div>
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-cream/60 mb-1">Fecha</label>
-            <input
-              type="date"
-              value={fechaDia}
-              onChange={(e) => setFechaDia(e.target.value)}
-              required
-              className="input-field"
-            />
-          </div>
-          <div className="col-span-2">
-            <button type="submit" className="btn-primary">Asignar</button>
-          </div>
-        </form>
-      )}
 
-      {turnosDia.length === 0 ? (
-        <p className="text-cream/40">No hay turnos por día pendientes.</p>
-      ) : (
-        <div className="grid gap-4">
-          {turnosDia.map((t) => {
-            const esMio = t.empleado_id === usuarioActual?.id
-            const segundos =
-              t.estado === 'en_curso' && t.hora_inicio
-                ? Math.floor((ahora - new Date(t.hora_inicio).getTime()) / 1000)
-                : 0
-
-            return (
-              <div key={t.id} className="card p-5 flex justify-between items-center gap-3">
-                <div className="min-w-0">
-                  <p className="text-cream font-medium">{t.perfiles?.nombre || 'Sin nombre'}</p>
-                  <p className="text-cream/50 text-sm font-mono">{t.fecha}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {t.estado === 'pendiente' && esMio && (
-                    <button onClick={() => iniciarTurnoDia(t)} className="btn-primary">
-                      Iniciar turno
-                    </button>
-                  )}
-                  {t.estado === 'pendiente' && !esMio && (
-                    <span className="text-cream/40 text-sm">Pendiente de iniciar</span>
-                  )}
-                  {t.estado === 'en_curso' && (
-                    <div className="text-right">
-                      <p className="font-mono text-xl text-sage mb-2">
-                        {formatearDuracion(segundos)}
-                      </p>
-                      {esMio && (
-                        <button onClick={() => finalizarTurnoDia(t)} className="btn-primary">
-                          Finalizar turno
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => eliminarTurnoDia(t)}
-                    className="text-ember hover:bg-ember/10 p-1.5 rounded-lg"
-                    title="Eliminar turno por día"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+          <button
+            onClick={() => setMostrarFormDia(!mostrarFormDia)}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl font-bold text-xs transition-all shadow-md active:scale-[0.98] ${
+              mostrarFormDia
+                ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                : 'bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20'
+            }`}
+          >
+            {mostrarFormDia ? <><X size={16} /> Cancelar</> : <><Plus size={16} /> Asignar por Día</>}
+          </button>
         </div>
-      )}
 
+        {/* FORMULARIO TURNO POR DÍA */}
+        {mostrarFormDia && (
+          <form
+            onSubmit={asignarTurnoDia}
+            className="bg-slate-800/80 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl backdrop-blur-xl space-y-4 animate-in fade-in duration-200"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Empleado
+                </label>
+                <select
+                  value={empleadoIdDia}
+                  onChange={(e) => setEmpleadoIdDia(e.target.value)}
+                  required
+                  className="w-full bg-slate-900/80 border border-slate-700/70 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                >
+                  <option value="">Seleccionar empleado...</option>
+                  {perfiles.map((p) => (
+                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                  Fecha Puntual
+                </label>
+                <input
+                  type="date"
+                  value={fechaDia}
+                  onChange={(e) => setFechaDia(e.target.value)}
+                  required
+                  className="w-full bg-slate-900/80 border border-slate-700/70 rounded-xl px-3.5 py-2.5 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-amber-500/20 active:scale-[0.98] transition-all"
+            >
+              Asignar Turno Eventual
+            </button>
+          </form>
+        )}
+
+        {/* LISTADO TARJETAS TURNOS POR DÍA */}
+        {turnosDia.length === 0 ? (
+          <div className="bg-slate-800/20 border border-slate-700/30 rounded-2xl p-6 text-center text-xs text-slate-500">
+            No hay turnos por día pendientes de iniciar o en curso.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {turnosDia.map((t) => {
+              const esMio = t.empleado_id === usuarioActual?.id
+              const segundos =
+                t.estado === 'en_curso' && t.hora_inicio
+                  ? Math.floor((ahora - new Date(t.hora_inicio).getTime()) / 1000)
+                  : 0
+
+              return (
+                <div
+                  key={t.id}
+                  className="bg-slate-800/50 border border-slate-700/40 rounded-2xl p-4 flex flex-col justify-between gap-4 backdrop-blur-md"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-100 text-sm">{t.perfiles?.nombre || 'Sin nombre'}</p>
+                      <p className="text-xs font-mono text-slate-400 mt-0.5">{t.fecha}</p>
+                    </div>
+
+                    <button
+                      onClick={() => eliminarTurnoDia(t)}
+                      className="text-slate-500 hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-all"
+                      title="Eliminar turno por día"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-700/40 flex items-center justify-between gap-2">
+                    {/* ESTADO PENDIENTE */}
+                    {t.estado === 'pendiente' && esMio && (
+                      <button
+                        onClick={() => iniciarTurnoDia(t)}
+                        className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+                      >
+                        Iniciar Turno Ahora
+                      </button>
+                    )}
+                    {t.estado === 'pendiente' && !esMio && (
+                      <span className="text-xs text-slate-500 italic font-medium">Pendiente de iniciar por el empleado</span>
+                    )}
+
+                    {/* ESTADO EN CURSO */}
+                    {t.estado === 'en_curso' && (
+                      <div className="w-full flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="font-mono text-lg font-bold text-emerald-400">
+                            {formatearDuracion(segundos)}
+                          </span>
+                        </div>
+
+                        {esMio && (
+                          <button
+                            onClick={() => finalizarTurnoDia(t)}
+                            className="px-4 py-2 bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 font-bold text-xs rounded-xl transition-all active:scale-95"
+                          >
+                            Finalizar Turno
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* MODAL DE LOGROS */}
       {logroMensaje && <LogroModal mensaje={logroMensaje} onCerrar={() => setLogroMensaje('')} />}
     </div>
   )

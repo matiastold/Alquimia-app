@@ -11,37 +11,42 @@ const TABS = [
 export default function BottomNav({ vista, setVista, onAbrirMas, masActivo }) {
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-sage/10"
+      className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/90 border-t border-slate-800/80 backdrop-blur-xl shadow-2xl"
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <div className="max-w-2xl mx-auto grid grid-cols-6">
+      <div className="max-w-xl mx-auto grid grid-cols-6 items-center px-1">
         {TABS.map((t) => {
           const Icon = t.icon
-          const activo = vista === t.id
+          const activo = vista === t.id && !masActivo
           return (
             <button
               key={t.id}
               onClick={() => setVista(t.id)}
-              className={`flex flex-col items-center justify-center gap-1 py-2.5 min-h-14 transition-colors ${
-                activo ? 'text-sage' : 'text-cream/40'
+              className={`flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] transition-all duration-200 active:scale-95 ${
+                activo ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 font-medium'
               }`}
               aria-label={t.label}
               aria-current={activo ? 'page' : undefined}
             >
-              <Icon size={20} strokeWidth={activo ? 2.4 : 2} />
-              <span className="text-[10px] font-medium leading-none">{t.label}</span>
+              <div className={`p-1 rounded-xl transition-all ${activo ? 'bg-emerald-500/10' : ''}`}>
+                <Icon size={20} strokeWidth={activo ? 2.4 : 1.8} />
+              </div>
+              <span className="text-[10px] tracking-tight leading-none">{t.label}</span>
             </button>
           )
         })}
+
         <button
           onClick={onAbrirMas}
-          className={`flex flex-col items-center justify-center gap-1 py-2.5 min-h-14 transition-colors ${
-            masActivo ? 'text-sage' : 'text-cream/40'
+          className={`flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] transition-all duration-200 active:scale-95 ${
+            masActivo ? 'text-emerald-400 font-bold' : 'text-slate-400 hover:text-slate-200 font-medium'
           }`}
           aria-label="Más opciones"
         >
-          <MoreHorizontal size={20} strokeWidth={masActivo ? 2.4 : 2} />
-          <span className="text-[10px] font-medium leading-none">Más</span>
+          <div className={`p-1 rounded-xl transition-all ${masActivo ? 'bg-emerald-500/10' : ''}`}>
+            <MoreHorizontal size={20} strokeWidth={masActivo ? 2.4 : 1.8} />
+          </div>
+          <span className="text-[10px] tracking-tight leading-none">Más</span>
         </button>
       </div>
     </nav>

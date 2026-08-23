@@ -1,61 +1,68 @@
-import { Ghost, Key, Bell, LogOut, X } from 'lucide-react'
-import { activarNotificacionesPush } from '../lib/pushNotifications'
+import { Ghost, Key, LogOut, X } from 'lucide-react'
 
 export default function MasSheet({ onCerrar, onIrATurnoFantasma, onCambiarPassword, onCerrarSesion }) {
-  const handleActivarPush = async () => {
-    try {
-      await activarNotificacionesPush()
-      alert('¡Notificaciones activadas!')
-    } catch (e) {
-      alert(e.message)
-    }
-  }
-
   const opciones = [
     { icon: Ghost, label: 'Turno fantasma', onClick: onIrATurnoFantasma },
-    { icon: Bell, label: 'Activar notificaciones push', onClick: handleActivarPush },
     { icon: Key, label: 'Cambiar contraseña', onClick: onCambiarPassword },
   ]
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="fixed inset-0 bg-void/70" onClick={onCerrar} />
+      {/* OVERLAY */}
+      <div 
+        className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm transition-opacity" 
+        onClick={onCerrar} 
+      />
+
+      {/* BOTTOM SHEET */}
       <div
-        className="relative w-full max-w-2xl bg-surface rounded-t-3xl border-t border-sage/10 shadow-2xl shadow-black/50 p-4"
+        className="relative w-full max-w-xl bg-slate-900 border-t border-slate-800 rounded-t-[32px] shadow-2xl p-5 z-10 space-y-4 animate-in slide-in-from-bottom duration-300"
         style={{ paddingBottom: 'calc(2rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="w-10 h-1 bg-cream/20 rounded-full mx-auto mb-4" />
+        {/* INDICADOR DE ARRASTRE */}
+        <div className="w-12 h-1.5 bg-slate-700/60 rounded-full mx-auto" />
 
-        <div className="flex justify-between items-center mb-3">
-          <p className="font-display text-lg text-cream">Más</p>
-          <button onClick={onCerrar} className="icon-btn text-cream/50 hover:text-cream" aria-label="Cerrar menú">
-            <X size={20} />
+        <div className="flex justify-between items-center pt-1">
+          <p className="font-extrabold text-base text-slate-100">Más opciones</p>
+          <button 
+            onClick={onCerrar} 
+            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-xl transition-colors"
+            aria-label="Cerrar menú"
+          >
+            <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {opciones.map((op) => {
             const Icon = op.icon
             return (
               <button
                 key={op.label}
-                onClick={op.onClick}
-                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-sage/10 text-cream text-left transition-colors min-h-12"
+                onClick={() => {
+                  op.onClick()
+                  onCerrar()
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-slate-800/40 hover:bg-slate-800 border border-slate-800/60 text-slate-200 text-left transition-all active:scale-[0.99]"
               >
-                <Icon size={18} className="text-sage shrink-0" />
-                <span className="text-sm font-medium">{op.label}</span>
+                <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 shrink-0">
+                  <Icon size={18} />
+                </div>
+                <span className="text-xs font-semibold">{op.label}</span>
               </button>
             )
           })}
 
-          <div className="h-px bg-sage/10 my-2" />
+          <div className="h-px bg-slate-800 my-2" />
 
           <button
             onClick={onCerrarSesion}
-            className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-ember/10 text-ember text-left transition-colors min-h-12"
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 text-left transition-all active:scale-[0.99]"
           >
-            <LogOut size={18} className="shrink-0" />
-            <span className="text-sm font-medium">Cerrar sesión</span>
+            <div className="p-2 bg-rose-500/20 rounded-xl shrink-0">
+              <LogOut size={18} />
+            </div>
+            <span className="text-xs font-bold">Cerrar sesión</span>
           </button>
         </div>
       </div>

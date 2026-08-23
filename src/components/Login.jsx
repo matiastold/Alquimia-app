@@ -1,12 +1,16 @@
 import { useState } from 'react'
+import { Mail, Lock, User, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
-function LogoMark({ size = 36 }) {
+function LogoMark({ size = 42 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="text-sage">
-      <path d="M16 4 L28 26 H4 Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-      <rect x="12.5" y="16.5" width="7" height="7" transform="rotate(45 16 20)" fill="currentColor" />
-    </svg>
+    <div className="relative flex items-center justify-center">
+      <div className="absolute inset-0 bg-emerald-500/20 blur-xl rounded-full" />
+      <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="relative text-emerald-400">
+        <path d="M16 4 L28 26 H4 Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <rect x="12.5" y="16.5" width="7" height="7" transform="rotate(45 16 20)" fill="currentColor" />
+      </svg>
+    </div>
   )
 }
 
@@ -57,23 +61,34 @@ export default function Login() {
 
   const Wrapper = ({ children }) => (
     <div
-      className="min-h-screen flex items-center justify-center bg-void px-4"
+      className="min-h-screen w-full flex items-center justify-center bg-slate-950 px-4 py-8 relative overflow-hidden"
       style={{
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        paddingTop: 'calc(env(safe-area-inset-top) + 2rem)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 2rem)',
       }}
     >
-      <div className="w-full max-w-sm">
-        <div className="relative flex flex-col items-center mb-8">
-          <div className="absolute w-24 h-24 bg-sage/10 rounded-full blur-2xl" />
-          <div className="relative flex flex-col items-center gap-2">
-            <LogoMark />
-            <span className="font-display text-xl tracking-widest uppercase text-cream">
-              Alquimia
-            </span>
+      {/* Luz ambiental de fondo */}
+      <div className="absolute top-1/4 -left-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="w-full max-w-sm z-10 space-y-6">
+        {/* LOGO Y MARCA */}
+        <div className="flex flex-col items-center justify-center gap-3 text-center">
+          <LogoMark />
+          <div>
+            <h1 className="font-bold text-2xl tracking-widest uppercase text-slate-100 font-mono">
+              ALQUIMIA
+            </h1>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+              Sistema de Gestión & Ventas
+            </p>
           </div>
         </div>
-        <div className="card p-6">{children}</div>
+
+        {/* TARJETA GLASSMORPHISM */}
+        <div className="bg-slate-900/80 border border-slate-800/80 backdrop-blur-xl p-6 sm:p-8 rounded-3xl shadow-2xl">
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -81,139 +96,192 @@ export default function Login() {
   if (modoRecuperar) {
     return (
       <Wrapper>
-        <h1 className="font-display text-xl mb-2 text-center text-cream/90">
-          Recuperar contraseña
-        </h1>
+        <div className="space-y-4">
+          <h2 className="text-lg font-bold text-slate-100 text-center">
+            Recuperar Contraseña
+          </h2>
 
-        {exitoRecuperar ? (
-          <>
-            <p className="text-success text-sm text-center mb-6">
-              Te enviamos un email con un link para elegir una nueva contraseña. Revisá tu
-              bandeja de entrada (y spam).
-            </p>
-            <button
-              onClick={() => {
-                setModoRecuperar(false)
-                setExitoRecuperar(false)
-              }}
-              className="btn-primary w-full"
-            >
-              Volver al login
-            </button>
-          </>
-        ) : (
-          <form onSubmit={handleRecuperar}>
-            <p className="text-cream/50 text-sm text-center mb-6">
-              Ingresá tu email y te mandamos un link para elegir una nueva contraseña.
-            </p>
-            <div className="mb-6">
-              <label htmlFor="email-recuperar" className="label-field">Email</label>
-              <input
-                id="email-recuperar"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="input-field"
-              />
+          {exitoRecuperar ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-400 text-xs font-medium flex items-start gap-2.5">
+                <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+                <span>
+                  Te enviamos un email con un enlace para restablecer tu contraseña. Revisa tu
+                  bandeja de entrada o spam.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setModoRecuperar(false)
+                  setExitoRecuperar(false)
+                }}
+                className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-2xl transition-all text-xs active:scale-95"
+              >
+                Volver al inicio de sesión
+              </button>
             </div>
+          ) : (
+            <form onSubmit={handleRecuperar} className="space-y-4">
+              <p className="text-xs text-slate-400 text-center">
+                Ingresa tu email y te enviaremos las instrucciones para restablecer tu cuenta.
+              </p>
 
-            {error && <p className="text-ember text-sm mb-4">{error}</p>}
+              <div>
+                <label htmlFor="email-recuperar" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Correo Electrónico
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                  <input
+                    id="email-recuperar"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="ejemplo@correo.com"
+                    className="w-full bg-slate-950/60 border border-slate-700/60 rounded-2xl pl-10 pr-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                  />
+                </div>
+              </div>
 
-            <button type="submit" disabled={cargando} className="btn-primary w-full disabled:opacity-50">
-              {cargando ? 'Enviando...' : 'Enviar link'}
-            </button>
+              {error && (
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-medium flex items-center gap-2">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            <button
-              type="button"
-              onClick={() => setModoRecuperar(false)}
-              className="text-sm text-center mt-4 text-sage font-medium w-full min-h-11"
-            >
-              Volver al login
-            </button>
-          </form>
-        )}
+              <button
+                type="submit"
+                disabled={cargando}
+                className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all text-xs active:scale-95 mt-2"
+              >
+                {cargando ? 'Enviando enlace...' : 'Enviar enlace'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModoRecuperar(false)}
+                className="w-full py-2.5 text-xs text-slate-400 hover:text-slate-200 font-medium flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <ArrowLeft size={14} /> Volver al login
+              </button>
+            </form>
+          )}
+        </div>
       </Wrapper>
     )
   }
 
   return (
     <Wrapper>
-      <h1 className="font-display text-xl mb-6 text-center text-cream/90">
-        {modoRegistro ? 'Crear cuenta' : 'Iniciar sesión'}
-      </h1>
+      <div className="space-y-5">
+        <h2 className="text-lg font-bold text-slate-100 text-center">
+          {modoRegistro ? 'Crear una cuenta' : 'Iniciar Sesión'}
+        </h2>
 
-      <form onSubmit={handleSubmit}>
-        {modoRegistro && (
-          <div className="mb-4">
-            <label htmlFor="nombre" className="label-field">Nombre</label>
-            <input
-              id="nombre"
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              required
-              className="input-field"
-            />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {modoRegistro && (
+            <div>
+              <label htmlFor="nombre" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Nombre Completo
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                <input
+                  id="nombre"
+                  type="text"
+                  value={nombre}
+                  onChange={(e) => setNombre(e.target.value)}
+                  required
+                  placeholder="Tu nombre"
+                  className="w-full bg-slate-950/60 border border-slate-700/60 rounded-2xl pl-10 pr-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="email" className="block text-xs font-semibold text-slate-300 mb-1.5">
+              Correo Electrónico
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="usuario@correo.com"
+                className="w-full bg-slate-950/60 border border-slate-700/60 rounded-2xl pl-10 pr-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+              />
+            </div>
           </div>
-        )}
 
-        <div className="mb-4">
-          <label htmlFor="email" className="label-field">Email</label>
-          <input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="input-field"
-          />
-        </div>
-
-        <div className="mb-2">
-          <label htmlFor="password" className="label-field">Contraseña</label>
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-            className="input-field"
-          />
-        </div>
-
-        {!modoRegistro ? (
-          <div className="text-right mb-4">
-            <button
-              type="button"
-              onClick={() => setModoRecuperar(true)}
-              className="text-sm text-sage min-h-11 px-1"
-            >
-              ¿Olvidaste tu contraseña?
-            </button>
+          <div>
+            <div className="flex justify-between items-center mb-1.5">
+              <label htmlFor="password" className="block text-xs font-semibold text-slate-300">
+                Contraseña
+              </label>
+              {!modoRegistro && (
+                <button
+                  type="button"
+                  onClick={() => setModoRecuperar(true)}
+                  className="text-[11px] text-emerald-400 hover:underline font-medium"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                placeholder="••••••••"
+                className="w-full bg-slate-950/60 border border-slate-700/60 rounded-2xl pl-10 pr-4 py-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-sm"
+              />
+            </div>
           </div>
-        ) : (
-          <div className="mb-4" />
-        )}
 
-        {error && <p className="text-ember text-sm mb-4">{error}</p>}
+          {error && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-2xl text-rose-400 text-xs font-medium flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-        <button type="submit" disabled={cargando} className="btn-primary w-full disabled:opacity-50">
-          {cargando ? 'Cargando...' : modoRegistro ? 'Registrarme' : 'Entrar'}
-        </button>
-
-        <p className="text-sm text-center mt-4 text-cream/50">
-          {modoRegistro ? '¿Ya tenés cuenta?' : '¿No tenés cuenta?'}{' '}
           <button
-            type="button"
-            onClick={() => setModoRegistro(!modoRegistro)}
-            className="text-sage font-medium"
+            type="submit"
+            disabled={cargando}
+            className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 transition-all text-xs active:scale-95 pt-3.5"
           >
-            {modoRegistro ? 'Iniciar sesión' : 'Registrarme'}
+            {cargando
+              ? 'Procesando...'
+              : modoRegistro
+              ? 'Crear Mi Cuenta'
+              : 'Iniciar Sesión'}
           </button>
-        </p>
-      </form>
+
+          <div className="pt-2 text-center">
+            <p className="text-xs text-slate-400">
+              {modoRegistro ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}{' '}
+              <button
+                type="button"
+                onClick={() => setModoRegistro(!modoRegistro)}
+                className="text-emerald-400 font-bold hover:underline"
+              >
+                {modoRegistro ? 'Ingresar' : 'Registrarte'}
+              </button>
+            </p>
+          </div>
+        </form>
+      </div>
     </Wrapper>
   )
 }

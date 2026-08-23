@@ -1,74 +1,40 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-@theme {
-  --font-display: "Fraunces", serif;
-  --font-body: "Work Sans", sans-serif;
-  --font-mono: "IBM Plex Mono", monospace;
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
 
-  --color-void: #050605;
-  --color-surface: #0d0f0d;
-  --color-surface-light: #171a17;
-  --color-sage: #9bc1a6;
-  --color-sage-light: #b9d6c0;
-  --color-cream: #ededе3;
-  --color-ember: #e2624b;
-  --color-success: #6fbf8c;
+  body {
+    @apply bg-slate-950 text-slate-100 font-sans antialiased min-h-screen overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Personalización del Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #020617;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+  }
 }
 
-body {
-  font-family: var(--font-body);
-  background-color: var(--color-void);
-  color: var(--color-cream);
-  overflow-x: hidden;
-  -webkit-tap-highlight-color: transparent;
-}
-
-*:focus-visible {
-  outline: 2px solid var(--color-sage);
-  outline-offset: 2px;
-}
-
-::-webkit-scrollbar {
-  height: 0;
-  width: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-surface-light);
-  border-radius: 999px;
-}
-
+/* Clases de Utilidad y compatibilidad con variantes Glassmorphism */
 @layer components {
-  .card {
-    @apply bg-surface rounded-2xl border border-sage/10 shadow-lg shadow-black/30;
-  }
-  .sheet-panel {
-    @apply bg-surface rounded-2xl border border-sage/10 shadow-2xl shadow-black/50;
-  }
-  .btn-primary {
-    @apply bg-sage text-void font-medium px-4 py-2.5 rounded-xl hover:bg-sage-light active:scale-[0.98] transition-all min-h-11;
-  }
-  .btn-ghost {
-    @apply bg-transparent text-sage border border-sage/30 font-medium px-4 py-2.5 rounded-xl hover:bg-sage/10 active:scale-[0.98] transition-all min-h-11;
-  }
-  .icon-btn {
-    @apply w-10 h-10 rounded-full flex items-center justify-center hover:bg-sage/10 active:scale-95 transition-all;
-  }
-  .badge-alert {
-    @apply inline-flex items-center gap-1 text-xs font-medium text-ember bg-ember/10 px-2 py-0.5 rounded-full border border-ember/20;
-  }
-  .chip {
-    @apply shrink-0 px-3 py-1.5 rounded-full text-sm border transition-colors min-h-9;
-  }
-  .chip-activo {
-    @apply bg-sage text-void border-sage;
-  }
-  .chip-inactivo {
-    @apply text-cream/60 border-sage/20 hover:bg-sage/10;
-  }
-  .input-field {
-    @apply w-full bg-void/40 border border-sage/20 rounded-xl px-3 py-2.5 text-cream placeholder-cream/30 focus:outline-none focus:ring-2 focus:ring-sage/40 min-h-11;
-  }
-  .label-field {
-    @apply block text-sm font-medium text-cream/60 mb-1.5;
+  .card-glass {
+    @apply bg-slate-900/80 border border-slate-800/80 backdrop-blur-xl rounded-3xl shadow-xl;
   }
 }
