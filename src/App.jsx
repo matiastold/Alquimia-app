@@ -3,6 +3,7 @@ import { supabase } from './lib/supabaseClient'
 import Login from './components/Login'
 import Stock from './components/Stock'
 import Ventas from './components/Ventas'
+import HistorialVentas from './components/HistorialVentas'
 import Turnos from './components/Turnos'
 import TurnoFantasma from './components/TurnoFantasma'
 import Libreta from './components/Libreta'
@@ -92,6 +93,7 @@ function App() {
       <main className="max-w-2xl mx-auto px-4 py-5 pb-28">
         {vista === 'stock' && <Stock />}
         {vista === 'ventas' && <Ventas />}
+        {vista === 'historial_ventas' && <HistorialVentas />}
         {vista === 'turnos' && <Turnos />}
         {vista === 'libreta' && <Libreta />}
         {vista === 'reportes' && <Reportes />}
@@ -106,10 +108,14 @@ function App() {
         masActivo={masActivo}
       />
 
-      {/* MODAL MÁS OPONENTES */}
+      {/* MODAL MÁS OPCIONES */}
       {masAbierto && (
         <MasSheet
           onCerrar={() => setMasAbierto(false)}
+          onIrAHistorialVentas={() => {
+            setVista('historial_ventas')
+            setMasAbierto(false)
+          }}
           onIrATurnoFantasma={() => {
             setVista('fantasma')
             setMasAbierto(false)

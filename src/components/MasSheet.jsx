@@ -1,7 +1,14 @@
-import { Ghost, Key, LogOut, X } from 'lucide-react'
+import { Ghost, Key, LogOut, X, Receipt } from 'lucide-react'
 
-export default function MasSheet({ onCerrar, onIrATurnoFantasma, onCambiarPassword, onCerrarSesion }) {
+export default function MasSheet({ 
+  onCerrar, 
+  onIrAHistorialVentas, 
+  onIrATurnoFantasma, 
+  onCambiarPassword, 
+  onCerrarSesion 
+}) {
   const opciones = [
+    { icon: Receipt, label: 'Historial de Ventas', onClick: onIrAHistorialVentas },
     { icon: Ghost, label: 'Turno fantasma', onClick: onIrATurnoFantasma },
     { icon: Key, label: 'Cambiar contraseña', onClick: onCambiarPassword },
   ]
