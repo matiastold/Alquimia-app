@@ -5,12 +5,12 @@
   --font-body: "Work Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
 
---color-void: #050605;
+  --color-void: #050605;
   --color-surface: #0d0f0d;
   --color-surface-light: #171a17;
   --color-sage: #9bc1a6;
   --color-sage-light: #b9d6c0;
-  --color-cream: #edede3;
+  --color-cream: #ededе3;
   --color-ember: #e2624b;
   --color-success: #6fbf8c;
 }
@@ -20,31 +20,55 @@ body {
   background-color: var(--color-void);
   color: var(--color-cream);
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-sage);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  height: 0;
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surface-light);
+  border-radius: 999px;
 }
 
 @layer components {
   .card {
-    @apply bg-surface rounded-xl border border-sage/10 shadow-lg shadow-black/30;
+    @apply bg-surface rounded-2xl border border-sage/10 shadow-lg shadow-black/30;
+  }
+  .sheet-panel {
+    @apply bg-surface rounded-2xl border border-sage/10 shadow-2xl shadow-black/50;
   }
   .btn-primary {
-    @apply bg-sage text-void font-medium px-4 py-2 rounded-lg hover:bg-sage-light transition-colors;
+    @apply bg-sage text-void font-medium px-4 py-2.5 rounded-xl hover:bg-sage-light active:scale-[0.98] transition-all min-h-11;
   }
   .btn-ghost {
-    @apply bg-transparent text-sage border border-sage/30 font-medium px-4 py-2 rounded-lg hover:bg-sage/10 transition-colors;
+    @apply bg-transparent text-sage border border-sage/30 font-medium px-4 py-2.5 rounded-xl hover:bg-sage/10 active:scale-[0.98] transition-all min-h-11;
+  }
+  .icon-btn {
+    @apply w-10 h-10 rounded-full flex items-center justify-center hover:bg-sage/10 active:scale-95 transition-all;
   }
   .badge-alert {
     @apply inline-flex items-center gap-1 text-xs font-medium text-ember bg-ember/10 px-2 py-0.5 rounded-full border border-ember/20;
   }
-  .nav-tab {
-    @apply flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors;
+  .chip {
+    @apply shrink-0 px-3 py-1.5 rounded-full text-sm border transition-colors min-h-9;
   }
-  .nav-tab-active {
-    @apply bg-sage text-void;
+  .chip-activo {
+    @apply bg-sage text-void border-sage;
   }
-  .nav-tab-inactive {
-    @apply text-cream/50 hover:bg-sage/10 hover:text-cream;
+  .chip-inactivo {
+    @apply text-cream/60 border-sage/20 hover:bg-sage/10;
   }
   .input-field {
-    @apply w-full bg-void/40 border border-sage/20 rounded-lg px-3 py-2 text-cream placeholder-cream/30 focus:outline-none focus:ring-2 focus:ring-sage/40;
+    @apply w-full bg-void/40 border border-sage/20 rounded-xl px-3 py-2.5 text-cream placeholder-cream/30 focus:outline-none focus:ring-2 focus:ring-sage/40 min-h-11;
+  }
+  .label-field {
+    @apply block text-sm font-medium text-cream/60 mb-1.5;
   }
 }

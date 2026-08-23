@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart3, Trophy, Clock } from 'lucide-react'
+import { BarChart3, Trophy, Clock, Wallet } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Reportes() {
@@ -11,6 +11,8 @@ export default function Reportes() {
   const [ventasPorEmpleado, setVentasPorEmpleado] = useState([])
   const [rankingVentasMes, setRankingVentasMes] = useState([])
   const [rankingHorasMes, setRankingHorasMes] = useState([])
+  const [cajaHoy, setCajaHoy] = useState({})
+  const [ventasPorCategoria, setVentasPorCategoria] = useState([])
 
   const cargarReportes = async () => {
     setCargando(true)
@@ -18,7 +20,7 @@ export default function Reportes() {
 
     const { data: ventas, error: errorVentas } = await supabase
       .from('ventas')
-      .select('id, total, vendedor_id, created_at, perfiles(nombre)')
+      .select('id, total, vendedor_id, created_at, metodo_pago, perfiles(nombre)')
 
     if (errorVentas) {
       setError(errorVentas.message)
@@ -35,14 +37,26 @@ export default function Reportes() {
       const nombre = v.perfiles?.nombre || 'Sin nombre'
       porEmpleado[nombre] = (porEmpleado[nombre] || 0) + Number(v.total)
     })
-    const listaEmpleados = Object.entries(porEmpleado)
-      .map(([nombre, total]) => ({ nombre, total }))
-      .sort((a, b) => b.total - a.total)
-    setVentasPorEmpleado(listaEmpleados)
+    setVentasPorEmpleado(
+      Object.entries(porEmpleado)
+        .map(([nombre, total]) => ({ nombre, total }))
+        .sort((a, b) => b.total - a.total)
+    )
+
+    // Caja de hoy por método de pago
+    const hoy = new Date().toISOString().slice(0, 10)
+    const ventasHoy = ventas.filter((v) => v.created_at.slice(0, 10) === hoy)
+    const caja = { efectivo: 0, transferencia: 0, anotacion: 0 }
+    ventasHoy.forEach((v) => {
+      if (v.metodo_pago && caja[v.metodo_pago] !== undefined) {
+        caja[v.metodo_pago] += Number(v.total)
+      }
+    })
+    setCajaHoy(caja)
 
     const { data: items, error: errorItems } = await supabase
       .from('venta_items')
-      .select('cantidad, producto_id, productos(nombre)')
+      .select('cantidad, precio_unitario, producto_id, productos(nombre, categoria)')
 
     if (errorItems) {
       setError(errorItems.message)
@@ -51,17 +65,30 @@ export default function Reportes() {
     }
 
     const porProducto = {}
+    const porCategoria = {}
     items.forEach((it) => {
       const nombre = it.productos?.nombre || 'Producto eliminado'
       porProducto[nombre] = (porProducto[nombre] || 0) + it.cantidad
-    })
-    const listaProductos = Object.entries(porProducto)
-      .map(([nombre, cantidad]) => ({ nombre, cantidad }))
-      .sort((a, b) => b.cantidad - a.cantidad)
-      .slice(0, 5)
-    setTopProductos(listaProductos)
 
-    // --- Ranking del mes actual ---
+      const categoria = it.productos?.categoria || 'Sin categoría'
+      porCategoria[categoria] =
+        (porCategoria[categoria] || 0) + it.cantidad * Number(it.precio_unitario)
+    })
+
+    setTopProductos(
+      Object.entries(porProducto)
+        .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+        .sort((a, b) => b.cantidad - a.cantidad)
+        .slice(0, 5)
+    )
+
+    setVentasPorCategoria(
+      Object.entries(porCategoria)
+        .map(([nombre, total]) => ({ nombre, total }))
+        .sort((a, b) => b.total - a.total)
+    )
+
+    // Ranking del mes actual
     const ahora = new Date()
     const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
 
@@ -71,13 +98,12 @@ export default function Reportes() {
       const nombre = v.perfiles?.nombre || 'Sin nombre'
       porEmpleadoMes[nombre] = (porEmpleadoMes[nombre] || 0) + Number(v.total)
     })
-    const rankingVentas = Object.entries(porEmpleadoMes)
-      .map(([nombre, total]) => ({ nombre, total }))
-      .sort((a, b) => b.total - a.total)
-    setRankingVentasMes(rankingVentas)
+    setRankingVentasMes(
+      Object.entries(porEmpleadoMes)
+        .map(([nombre, total]) => ({ nombre, total }))
+        .sort((a, b) => b.total - a.total)
+    )
 
-    // Horas trabajadas en el mes (turnos fijos cumplidos cuentan como la duración del turno,
-    // turnos fantasma cuentan la duración real registrada)
     const { data: asistencias, error: errorAsist } = await supabase
       .from('asistencias')
       .select('empleado_id, tipo, fecha, duracion_minutos, perfiles(nombre)')
@@ -86,7 +112,6 @@ export default function Reportes() {
       const inicioMesStr = inicioMes.toISOString().slice(0, 10)
       const asistenciasDelMes = asistencias.filter((a) => a.fecha >= inicioMesStr)
 
-      // Necesitamos las horas de cada turno fijo para calcular su duración
       const { data: turnosFijos } = await supabase.from('turnos').select('empleado_id, hora_inicio, hora_fin')
 
       const minutosDeUnTurnoFijo = (empleadoId) => {
@@ -105,10 +130,11 @@ export default function Reportes() {
         porEmpleadoHoras[nombre] = (porEmpleadoHoras[nombre] || 0) + minutos
       })
 
-      const rankingHoras = Object.entries(porEmpleadoHoras)
-        .map(([nombre, minutos]) => ({ nombre, horas: minutos / 60 }))
-        .sort((a, b) => b.horas - a.horas)
-      setRankingHorasMes(rankingHoras)
+      setRankingHorasMes(
+        Object.entries(porEmpleadoHoras)
+          .map(([nombre, minutos]) => ({ nombre, horas: minutos / 60 }))
+          .sort((a, b) => b.horas - a.horas)
+      )
     }
 
     setCargando(false)
@@ -140,6 +166,24 @@ export default function Reportes() {
         </div>
       </div>
 
+      <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide flex items-center gap-2">
+        <Wallet size={16} className="text-sage" /> Caja de hoy
+      </h3>
+      <div className="grid grid-cols-3 gap-3 mb-10">
+        <div className="card p-4 text-center">
+          <p className="text-xs text-cream/50">Efectivo</p>
+          <p className="font-mono font-semibold text-cream">${cajaHoy.efectivo?.toFixed(2) || '0.00'}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-xs text-cream/50">Transferencia</p>
+          <p className="font-mono font-semibold text-cream">${cajaHoy.transferencia?.toFixed(2) || '0.00'}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-xs text-cream/50">Anotación</p>
+          <p className="font-mono font-semibold text-ember">${cajaHoy.anotacion?.toFixed(2) || '0.00'}</p>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-6 mb-10">
         <div>
           <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide">
@@ -161,16 +205,16 @@ export default function Reportes() {
 
         <div>
           <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide">
-            Ventas por empleado (histórico)
+            Ventas por categoría
           </h3>
           <div className="card divide-y divide-sage/10">
-            {ventasPorEmpleado.length === 0 ? (
+            {ventasPorCategoria.length === 0 ? (
               <p className="p-4 text-sm text-cream/40">Sin ventas todavía.</p>
             ) : (
-              ventasPorEmpleado.map((e) => (
-                <div key={e.nombre} className="flex justify-between px-4 py-2">
-                  <span className="text-cream">{e.nombre}</span>
-                  <span className="font-mono font-medium text-sage">${e.total.toFixed(2)}</span>
+              ventasPorCategoria.map((c) => (
+                <div key={c.nombre} className="flex justify-between px-4 py-2">
+                  <span className="text-cream">{c.nombre}</span>
+                  <span className="font-mono font-medium text-sage">${c.total.toFixed(2)}</span>
                 </div>
               ))
             )}
@@ -178,9 +222,25 @@ export default function Reportes() {
         </div>
       </div>
 
-      <h3 className="font-display text-xl mb-4 text-cream capitalize">
-        Ranking de {nombreMes}
-      </h3>
+      <div className="mb-10">
+        <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide">
+          Ventas por empleado (histórico)
+        </h3>
+        <div className="card divide-y divide-sage/10">
+          {ventasPorEmpleado.length === 0 ? (
+            <p className="p-4 text-sm text-cream/40">Sin ventas todavía.</p>
+          ) : (
+            ventasPorEmpleado.map((e) => (
+              <div key={e.nombre} className="flex justify-between px-4 py-2">
+                <span className="text-cream">{e.nombre}</span>
+                <span className="font-mono font-medium text-sage">${e.total.toFixed(2)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <h3 className="font-display text-xl mb-4 text-cream capitalize">Ranking de {nombreMes}</h3>
 
       <div className="grid md:grid-cols-2 gap-6">
         <div>
@@ -230,9 +290,7 @@ export default function Reportes() {
                     </span>
                     <span className="text-cream">{e.nombre}</span>
                   </div>
-                  <span className="font-mono font-medium text-sage">
-                    {e.horas.toFixed(1)} hs
-                  </span>
+                  <span className="font-mono font-medium text-sage">{e.horas.toFixed(1)} hs</span>
                 </div>
               ))
             )}

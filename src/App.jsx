@@ -4,21 +4,15 @@ import Login from './components/Login'
 import Stock from './components/Stock'
 import Ventas from './components/Ventas'
 import Turnos from './components/Turnos'
+import TurnoFantasma from './components/TurnoFantasma'
+import Libreta from './components/Libreta'
 import Reportes from './components/Reportes'
 import Notificaciones from './components/Notificaciones'
 import CambiarPassword from './components/CambiarPassword'
-import { Package, ShoppingCart, CalendarClock, BarChart3, Ghost } from 'lucide-react'
-import TurnoFantasma from './components/TurnoFantasma'
+import BottomNav from './components/BottomNav'
+import MasSheet from './components/MasSheet'
 
-const TABS = [
-  { id: 'stock', label: 'Stock', icon: Package },
-  { id: 'ventas', label: 'Ventas', icon: ShoppingCart },
-  { id: 'turnos', label: 'Turnos', icon: CalendarClock },
-  { id: 'fantasma', label: 'Turno fantasma', icon: Ghost },
-  { id: 'reportes', label: 'Reportes', icon: BarChart3 },
-]
-
-function LogoMark({ size = 30 }) {
+function LogoMark({ size = 24 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="text-sage">
       <path d="M16 4 L28 26 H4 Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -27,10 +21,13 @@ function LogoMark({ size = 30 }) {
   )
 }
 
+const SECCIONES_PRINCIPALES = ['stock', 'ventas', 'turnos', 'libreta', 'reportes']
+
 function App() {
   const [session, setSession] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [vista, setVista] = useState('stock')
+  const [masAbierto, setMasAbierto] = useState(false)
   const [mostrarCambiarPassword, setMostrarCambiarPassword] = useState(false)
 
   useEffect(() => {
@@ -39,12 +36,13 @@ function App() {
       setCargando(false)
     })
 
-  const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-    setSession(session)
-    if (_event === 'PASSWORD_RECOVERY') {
-      setMostrarCambiarPassword(true)
-  }
-})
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      if (_event === 'PASSWORD_RECOVERY') {
+        setMostrarCambiarPassword(true)
+      }
+    })
+
     return () => listener.subscription.unsubscribe()
   }, [])
 
@@ -64,59 +62,57 @@ function App() {
     return <Login />
   }
 
+  const masActivo = !SECCIONES_PRINCIPALES.includes(vista)
+
   return (
     <div className="min-h-screen bg-void text-cream">
-      <header className="bg-surface border-b border-sage/10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
+      <header
+        className="sticky top-0 z-30 bg-surface/95 backdrop-blur border-b border-sage/10"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="max-w-2xl mx-auto px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-2">
             <LogoMark />
-            <h1 className="font-display text-xl tracking-widest uppercase">Alquimia</h1>
+            <span className="font-display text-lg tracking-widest uppercase">Alquimia</span>
           </div>
-          <div className="flex items-center gap-4">
-            <Notificaciones />
-<button
-  onClick={() => setMostrarCambiarPassword(true)}
-  className="text-sm text-cream/50 hover:text-cream font-medium"
->
-  Cambiar contraseña
-</button>
-<button
-  onClick={cerrarSesion}
-  className="text-sm text-cream/50 hover:text-cream font-medium"
->
-  Cerrar sesión
-</button>
-          </div>
+          <Notificaciones />
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
-      <nav className="flex gap-2 mb-8 overflow-x-auto pb-1">
-          {TABS.map((t) => {
-            const Icon = t.icon
-            return (
-              <button
-                key={t.id}
-                onClick={() => setVista(t.id)}
-                className={`nav-tab ${vista === t.id ? 'nav-tab-active' : 'nav-tab-inactive'}`}
-              >
-                <Icon size={16} />
-                {t.label}
-              </button>
-            )
-          })}
-        </nav>
-
+      <main className="max-w-2xl mx-auto px-4 py-5 pb-28">
         {vista === 'stock' && <Stock />}
         {vista === 'ventas' && <Ventas />}
         {vista === 'turnos' && <Turnos />}
+        {vista === 'libreta' && <Libreta />}
         {vista === 'reportes' && <Reportes />}
-        {mostrarCambiarPassword && (
-  <CambiarPassword onCerrar={() => setMostrarCambiarPassword(false)} />
-)}
         {vista === 'fantasma' && <TurnoFantasma />}
+      </main>
 
-      </div>
+      <BottomNav
+        vista={vista}
+        setVista={setVista}
+        onAbrirMas={() => setMasAbierto(true)}
+        masActivo={masActivo}
+      />
+
+      {masAbierto && (
+        <MasSheet
+          onCerrar={() => setMasAbierto(false)}
+          onIrATurnoFantasma={() => {
+            setVista('fantasma')
+            setMasAbierto(false)
+          }}
+          onCambiarPassword={() => {
+            setMostrarCambiarPassword(true)
+            setMasAbierto(false)
+          }}
+          onCerrarSesion={cerrarSesion}
+        />
+      )}
+
+      {mostrarCambiarPassword && (
+        <CambiarPassword onCerrar={() => setMostrarCambiarPassword(false)} />
+      )}
     </div>
   )
 }

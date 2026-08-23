@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Ghost } from 'lucide-react'
+import { Ghost, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import { verificarLogroDiasTrabajados } from '../lib/logros'
 import LogroModal from './LogroModal'
@@ -81,42 +81,55 @@ export default function TurnoFantasma() {
     cargarTurnos()
   }
 
-const finalizarTurno = async (turno) => {
-  setError('')
-  const { error: errorRpc } = await supabase.rpc('finalizar_turno_fantasma', {
-    turno_id: turno.id,
-  })
-
-  if (errorRpc) {
-    setError('No se pudo finalizar el turno: ' + errorRpc.message)
-    return
-  }
-
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const { data: turnoActualizado } = await supabase
-    .from('turnos_fantasma')
-    .select('hora_inicio, hora_fin, duracion_minutos')
-    .eq('id', turno.id)
-    .single()
-
-  if (turnoActualizado) {
-    await supabase.from('asistencias').insert({
-      empleado_id: user.id,
-      tipo: 'fantasma',
-      fecha: new Date().toISOString().slice(0, 10),
-      hora_inicio: turnoActualizado.hora_inicio,
-      hora_fin: turnoActualizado.hora_fin,
-      duracion_minutos: turnoActualizado.duracion_minutos,
+  const finalizarTurno = async (turno) => {
+    setError('')
+    const { error: errorRpc } = await supabase.rpc('finalizar_turno_fantasma', {
+      turno_id: turno.id,
     })
 
-    const nombre = user.user_metadata?.nombre || user.email
-    const msg = await verificarLogroDiasTrabajados(user.id, nombre)
-    if (msg) setLogroMensaje(msg)
+    if (errorRpc) {
+      setError('No se pudo finalizar el turno: ' + errorRpc.message)
+      return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: turnoActualizado } = await supabase
+      .from('turnos_fantasma')
+      .select('hora_inicio, hora_fin, duracion_minutos')
+      .eq('id', turno.id)
+      .single()
+
+    if (turnoActualizado) {
+      await supabase.from('asistencias').insert({
+        empleado_id: user.id,
+        tipo: 'fantasma',
+        fecha: new Date().toISOString().slice(0, 10),
+        hora_inicio: turnoActualizado.hora_inicio,
+        hora_fin: turnoActualizado.hora_fin,
+        duracion_minutos: turnoActualizado.duracion_minutos,
+        turno_fantasma_id: turno.id,
+      })
+
+      const nombre = user.user_metadata?.nombre || user.email
+      const msg = await verificarLogroDiasTrabajados(user.id, nombre)
+      if (msg) setLogroMensaje(msg)
+    }
+
+    cargarTurnos()
   }
 
-  cargarTurnos()
-}
+  const eliminarTurno = async (turno) => {
+    const confirmar = window.confirm(
+      '¿Eliminar este turno fantasma? Si ya generó horas trabajadas, también se van a borrar.'
+    )
+    if (!confirmar) return
+
+    setError('')
+    const { error } = await supabase.from('turnos_fantasma').delete().eq('id', turno.id)
+    if (error) setError(error.message)
+    cargarTurnos()
+  }
 
   return (
     <div>
@@ -168,9 +181,11 @@ const finalizarTurno = async (turno) => {
                 : 0
 
             return (
-              <div key={t.id} className="card p-5 flex justify-between items-center">
-                <div>
-                  <p className="text-cream font-medium">{t.motivo || 'Cobertura solicitada'}</p>
+              <div key={t.id} className="card p-5 flex justify-between items-center gap-3">
+                <div className="min-w-0">
+                  <p className="text-cream font-medium truncate">
+                    {t.motivo || 'Cobertura solicitada'}
+                  </p>
                   <p className="text-cream/50 text-sm">
                     Pedido por {t.creador?.nombre || 'alguien'}
                     {t.estado === 'en_curso' && (
@@ -182,7 +197,7 @@ const finalizarTurno = async (turno) => {
                   </p>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right shrink-0 flex items-center gap-2">
                   {t.estado === 'disponible' && (
                     <button onClick={() => tomarTurno(t)} className="btn-primary">
                       Tomar turno
@@ -200,6 +215,13 @@ const finalizarTurno = async (turno) => {
                       )}
                     </div>
                   )}
+                  <button
+                    onClick={() => eliminarTurno(t)}
+                    className="text-ember hover:bg-ember/10 p-1.5 rounded-lg"
+                    title="Eliminar turno fantasma"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             )

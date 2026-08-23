@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, X } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Notificaciones() {
@@ -25,10 +25,8 @@ export default function Notificaciones() {
 
     const canal = supabase
       .channel('notificaciones-canal')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notificaciones' },
-        () => cargarNotificaciones()
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notificaciones' }, () =>
+        cargarNotificaciones()
       )
       .subscribe()
 
@@ -46,23 +44,31 @@ export default function Notificaciones() {
     <div className="relative">
       <button
         onClick={() => setAbierto(!abierto)}
-        className="relative bg-sage/10 hover:bg-sage/20 rounded-full w-10 h-10 flex items-center justify-center transition-colors text-sage"
+        className="icon-btn relative text-sage"
+        aria-label={`Notificaciones${sinLeer > 0 ? `, ${sinLeer} sin leer` : ''}`}
       >
-        <Bell size={18} />
+        <Bell size={19} />
         {sinLeer > 0 && (
-          <span className="absolute -top-1 -right-1 bg-ember text-void text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center">
-            {sinLeer}
+          <span className="absolute -top-0.5 -right-0.5 bg-ember text-void text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+            {sinLeer > 9 ? '9+' : sinLeer}
           </span>
         )}
       </button>
 
       {abierto && (
         <>
-          <div
-            className="fixed inset-0 z-40 md:hidden"
-            onClick={() => setAbierto(false)}
-          />
-          <div className="fixed left-4 right-4 top-20 z-50 card max-h-[70vh] overflow-y-auto md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-80 md:inset-x-auto">
+          <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
+          <div className="fixed left-3 right-3 top-16 z-50 sheet-panel max-h-[70vh] overflow-y-auto md:absolute md:left-auto md:right-0 md:top-full md:mt-2 md:w-80 md:inset-x-auto">
+            <div className="flex justify-between items-center px-4 py-3 border-b border-sage/10">
+              <p className="font-medium text-cream text-sm">Notificaciones</p>
+              <button
+                onClick={() => setAbierto(false)}
+                className="text-cream/40 hover:text-cream"
+                aria-label="Cerrar notificaciones"
+              >
+                <X size={16} />
+              </button>
+            </div>
             {notificaciones.length === 0 ? (
               <p className="p-4 text-sm text-cream/40">No hay notificaciones.</p>
             ) : (
@@ -70,7 +76,7 @@ export default function Notificaciones() {
                 <div
                   key={n.id}
                   onClick={() => marcarLeida(n.id)}
-                  className={`p-3 border-b border-sage/10 text-sm cursor-pointer break-words ${
+                  className={`p-3 border-b border-sage/10 text-sm cursor-pointer break-words last:border-0 ${
                     n.leida ? 'text-cream/40' : 'font-medium bg-sage/5 text-cream'
                   }`}
                 >

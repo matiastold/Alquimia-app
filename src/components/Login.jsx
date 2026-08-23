@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 
-function LogoMark({ size = 26 }) {
+function LogoMark({ size = 36 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" className="text-sage">
       <path d="M16 4 L28 26 H4 Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
@@ -55,91 +55,100 @@ export default function Login() {
     setCargando(false)
   }
 
-  if (modoRecuperar) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-void px-4">
-        <div className="card w-full max-w-sm p-8">
-          <div className="flex flex-col items-center gap-2 mb-8">
-            <LogoMark size={36} />
-            <span className="font-display text-lg tracking-widest uppercase text-cream">
+  const Wrapper = ({ children }) => (
+    <div
+      className="min-h-screen flex items-center justify-center bg-void px-4"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      <div className="w-full max-w-sm">
+        <div className="relative flex flex-col items-center mb-8">
+          <div className="absolute w-24 h-24 bg-sage/10 rounded-full blur-2xl" />
+          <div className="relative flex flex-col items-center gap-2">
+            <LogoMark />
+            <span className="font-display text-xl tracking-widest uppercase text-cream">
               Alquimia
             </span>
           </div>
-
-          <h1 className="font-display text-xl mb-2 text-center text-cream/90">
-            Recuperar contraseña
-          </h1>
-
-          {exitoRecuperar ? (
-            <>
-              <p className="text-success text-sm text-center mb-6">
-                Te enviamos un email con un link para elegir una nueva contraseña. Revisá tu
-                bandeja de entrada (y spam).
-              </p>
-              <button
-                onClick={() => {
-                  setModoRecuperar(false)
-                  setExitoRecuperar(false)
-                }}
-                className="btn-primary w-full"
-              >
-                Volver al login
-              </button>
-            </>
-          ) : (
-            <form onSubmit={handleRecuperar}>
-              <p className="text-cream/50 text-sm text-center mb-6">
-                Ingresá tu email y te mandamos un link para elegir una nueva contraseña.
-              </p>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-cream/60 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="input-field"
-                />
-              </div>
-
-              {error && <p className="text-ember text-sm mb-4">{error}</p>}
-
-              <button type="submit" disabled={cargando} className="btn-primary w-full disabled:opacity-50">
-                {cargando ? 'Enviando...' : 'Enviar link'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setModoRecuperar(false)}
-                className="text-sm text-center mt-4 text-sage font-medium w-full"
-              >
-                Volver al login
-              </button>
-            </form>
-          )}
         </div>
+        <div className="card p-6">{children}</div>
       </div>
+    </div>
+  )
+
+  if (modoRecuperar) {
+    return (
+      <Wrapper>
+        <h1 className="font-display text-xl mb-2 text-center text-cream/90">
+          Recuperar contraseña
+        </h1>
+
+        {exitoRecuperar ? (
+          <>
+            <p className="text-success text-sm text-center mb-6">
+              Te enviamos un email con un link para elegir una nueva contraseña. Revisá tu
+              bandeja de entrada (y spam).
+            </p>
+            <button
+              onClick={() => {
+                setModoRecuperar(false)
+                setExitoRecuperar(false)
+              }}
+              className="btn-primary w-full"
+            >
+              Volver al login
+            </button>
+          </>
+        ) : (
+          <form onSubmit={handleRecuperar}>
+            <p className="text-cream/50 text-sm text-center mb-6">
+              Ingresá tu email y te mandamos un link para elegir una nueva contraseña.
+            </p>
+            <div className="mb-6">
+              <label htmlFor="email-recuperar" className="label-field">Email</label>
+              <input
+                id="email-recuperar"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="input-field"
+              />
+            </div>
+
+            {error && <p className="text-ember text-sm mb-4">{error}</p>}
+
+            <button type="submit" disabled={cargando} className="btn-primary w-full disabled:opacity-50">
+              {cargando ? 'Enviando...' : 'Enviar link'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModoRecuperar(false)}
+              className="text-sm text-center mt-4 text-sage font-medium w-full min-h-11"
+            >
+              Volver al login
+            </button>
+          </form>
+        )}
+      </Wrapper>
     )
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-void px-4">
-      <form onSubmit={handleSubmit} className="card w-full max-w-sm p-8">
-        <div className="flex flex-col items-center gap-2 mb-8">
-          <LogoMark size={36} />
-          <span className="font-display text-lg tracking-widest uppercase text-cream">
-            Alquimia
-          </span>
-        </div>
+    <Wrapper>
+      <h1 className="font-display text-xl mb-6 text-center text-cream/90">
+        {modoRegistro ? 'Crear cuenta' : 'Iniciar sesión'}
+      </h1>
 
-        <h1 className="font-display text-xl mb-6 text-center text-cream/90">
-          {modoRegistro ? 'Crear cuenta' : 'Iniciar sesión'}
-        </h1>
-
+      <form onSubmit={handleSubmit}>
         {modoRegistro && (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-cream/60 mb-1">Nombre</label>
+            <label htmlFor="nombre" className="label-field">Nombre</label>
             <input
+              id="nombre"
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
@@ -150,8 +159,9 @@ export default function Login() {
         )}
 
         <div className="mb-4">
-          <label className="block text-sm font-medium text-cream/60 mb-1">Email</label>
+          <label htmlFor="email" className="label-field">Email</label>
           <input
+            id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -161,8 +171,9 @@ export default function Login() {
         </div>
 
         <div className="mb-2">
-          <label className="block text-sm font-medium text-cream/60 mb-1">Contraseña</label>
+          <label htmlFor="password" className="label-field">Contraseña</label>
           <input
+            id="password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -172,18 +183,19 @@ export default function Login() {
           />
         </div>
 
-        {!modoRegistro && (
+        {!modoRegistro ? (
           <div className="text-right mb-4">
             <button
               type="button"
               onClick={() => setModoRecuperar(true)}
-              className="text-sm text-sage"
+              className="text-sm text-sage min-h-11 px-1"
             >
               ¿Olvidaste tu contraseña?
             </button>
           </div>
+        ) : (
+          <div className="mb-4" />
         )}
-        {modoRegistro && <div className="mb-4" />}
 
         {error && <p className="text-ember text-sm mb-4">{error}</p>}
 
@@ -202,6 +214,6 @@ export default function Login() {
           </button>
         </p>
       </form>
-    </div>
+    </Wrapper>
   )
 }

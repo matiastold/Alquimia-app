@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react'
-import { ShoppingCart, Search } from 'lucide-react'
+import { ShoppingCart, Search, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 import LogroModal from './LogroModal'
 
 const UMBRALES_VENTA = [50000, 70000, 80000, 90000, 100000]
+
+const METODO_LABEL = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  anotacion: 'Anotación',
+}
 
 export default function Ventas() {
   const [productos, setProductos] = useState([])
@@ -16,6 +22,10 @@ export default function Ventas() {
   const [busqueda, setBusqueda] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [metodoPago, setMetodoPago] = useState('')
+  const [clientesLibreta, setClientesLibreta] = useState([])
+  const [clienteLibretaId, setClienteLibretaId] = useState('')
+  const [nombreNuevoCliente, setNombreNuevoCliente] = useState('')
+  const [ventasHoy, setVentasHoy] = useState([])
 
   const cargarProductos = async () => {
     setCargando(true)
@@ -29,8 +39,30 @@ export default function Ventas() {
     setCargando(false)
   }
 
+  const cargarClientesLibreta = async () => {
+    const { data } = await supabase
+      .from('clientes_libreta')
+      .select('*')
+      .order('nombre', { ascending: true })
+    if (data) setClientesLibreta(data)
+  }
+
+  const cargarVentasHoy = async () => {
+    const hoy = new Date().toISOString().slice(0, 10)
+    const { data, error } = await supabase
+      .from('ventas')
+      .select('id, total, metodo_pago, created_at, venta_items(cantidad, producto_id, productos(nombre))')
+      .gte('created_at', `${hoy}T00:00:00`)
+      .lte('created_at', `${hoy}T23:59:59`)
+      .order('created_at', { ascending: false })
+
+    if (!error) setVentasHoy(data)
+  }
+
   useEffect(() => {
     cargarProductos()
+    cargarClientesLibreta()
+    cargarVentasHoy()
   }, [])
 
   const categorias = Array.from(
@@ -78,19 +110,37 @@ export default function Ventas() {
     0
   )
 
+  const crearClienteLibretaRapido = async () => {
+    if (!nombreNuevoCliente.trim()) return
+    const { data, error } = await supabase
+      .from('clientes_libreta')
+      .insert({ nombre: nombreNuevoCliente })
+      .select()
+      .single()
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    setClientesLibreta((prev) => [...prev, data])
+    setClienteLibretaId(data.id)
+    setNombreNuevoCliente('')
+  }
+
   const verificarLogroVentaDiaria = async (userId, nombre) => {
     const hoy = new Date().toISOString().slice(0, 10)
 
-    const { data: ventasHoy } = await supabase
+    const { data: ventasDia } = await supabase
       .from('ventas')
       .select('total, created_at')
       .eq('vendedor_id', userId)
       .gte('created_at', `${hoy}T00:00:00`)
       .lte('created_at', `${hoy}T23:59:59`)
 
-    if (!ventasHoy) return
+    if (!ventasDia) return
 
-    const totalHoy = ventasHoy.reduce((acc, v) => acc + Number(v.total), 0)
+    const totalHoy = ventasDia.reduce((acc, v) => acc + Number(v.total), 0)
     const alcanzados = UMBRALES_VENTA.filter((u) => totalHoy >= u)
     if (alcanzados.length === 0) return
     const mayorAlcanzado = Math.max(...alcanzados)
@@ -120,6 +170,11 @@ export default function Ventas() {
 
   const confirmarVenta = async () => {
     if (carrito.length === 0 || !metodoPago) return
+    if (metodoPago === 'anotacion' && !clienteLibretaId) {
+      setError('Elegí a qué cliente de la libreta anotarle esta venta.')
+      return
+    }
+
     setProcesando(true)
     setError('')
     setMensajeExito('')
@@ -128,7 +183,12 @@ export default function Ventas() {
 
     const { data: venta, error: errorVenta } = await supabase
       .from('ventas')
-      .insert({ vendedor_id: user.id, total, metodo_pago: metodoPago })
+      .insert({
+        vendedor_id: user.id,
+        total,
+        metodo_pago: metodoPago,
+        cliente_libreta_id: metodoPago === 'anotacion' ? clienteLibretaId : null,
+      })
       .select()
       .single()
 
@@ -161,14 +221,60 @@ export default function Ventas() {
         .eq('id', item.producto.id)
     }
 
+    if (metodoPago === 'anotacion' && clienteLibretaId) {
+      const descripcion = carrito.map((i) => `${i.cantidad}x ${i.producto.nombre}`).join(', ')
+      await supabase.from('libreta_movimientos').insert({
+        cliente_id: clienteLibretaId,
+        descripcion,
+        monto: total,
+        venta_id: venta.id,
+      })
+    }
+
     const nombre = user.user_metadata?.nombre || user.email
     await verificarLogroVentaDiaria(user.id, nombre)
 
     setMensajeExito('Venta registrada correctamente.')
     setCarrito([])
     setMetodoPago('')
+    setClienteLibretaId('')
     cargarProductos()
+    cargarVentasHoy()
     setProcesando(false)
+  }
+
+  const eliminarVenta = async (venta) => {
+    const confirmar = window.confirm(
+      '¿Eliminar esta venta? Se va a restaurar el stock de los productos vendidos.'
+    )
+    if (!confirmar) return
+
+    setError('')
+
+    for (const item of venta.venta_items) {
+      const { data: prodActual } = await supabase
+        .from('productos')
+        .select('stock_actual')
+        .eq('id', item.producto_id)
+        .maybeSingle()
+
+      if (prodActual) {
+        await supabase
+          .from('productos')
+          .update({ stock_actual: prodActual.stock_actual + item.cantidad })
+          .eq('id', item.producto_id)
+      }
+    }
+
+    const { error: errorDelete } = await supabase.from('ventas').delete().eq('id', venta.id)
+
+    if (errorDelete) {
+      setError(errorDelete.message)
+      return
+    }
+
+    cargarProductos()
+    cargarVentasHoy()
   }
 
   return (
@@ -318,6 +424,42 @@ export default function Ventas() {
                   </div>
                 </div>
 
+                {metodoPago === 'anotacion' && (
+                  <div className="mt-4 card p-3">
+                    <p className="text-sm font-medium text-cream/60 mb-2">
+                      ¿A nombre de quién anotamos?
+                    </p>
+                    <select
+                      value={clienteLibretaId}
+                      onChange={(e) => setClienteLibretaId(e.target.value)}
+                      className="input-field mb-2"
+                    >
+                      <option value="">Seleccionar cliente...</option>
+                      {clientesLibreta.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.nombre}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={nombreNuevoCliente}
+                        onChange={(e) => setNombreNuevoCliente(e.target.value)}
+                        placeholder="O cliente nuevo..."
+                        className="input-field flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={crearClienteLibretaRapido}
+                        className="btn-ghost shrink-0"
+                      >
+                        + Crear
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <button
                   onClick={confirmarVenta}
                   disabled={procesando || !metodoPago}
@@ -329,6 +471,49 @@ export default function Ventas() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="mt-10">
+        <h3 className="font-semibold mb-2 text-cream/80 text-sm uppercase tracking-wide">
+          Ventas de hoy
+        </h3>
+        {ventasHoy.length === 0 ? (
+          <p className="text-cream/40 text-sm">Todavía no hay ventas hoy.</p>
+        ) : (
+          <div className="space-y-2">
+            {ventasHoy.map((v) => {
+              const resumen = v.venta_items
+                .map((it) => `${it.cantidad}x ${it.productos?.nombre || 'producto eliminado'}`)
+                .join(', ')
+              const hora = new Date(v.created_at).toLocaleTimeString('es-AR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+              return (
+                <div key={v.id} className="card p-3 flex justify-between items-center gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-cream truncate">{resumen}</p>
+                    <p className="text-xs text-cream/40">
+                      {hora} · {METODO_LABEL[v.metodo_pago] || v.metodo_pago}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="font-mono text-sage font-medium">
+                      ${Number(v.total).toFixed(2)}
+                    </span>
+                    <button
+                      onClick={() => eliminarVenta(v)}
+                      className="text-ember hover:bg-ember/10 p-1.5 rounded-lg"
+                      title="Eliminar venta"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {logroMensaje && (
