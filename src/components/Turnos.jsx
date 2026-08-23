@@ -1,47 +1,70 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Plus, Trash2, Clock, User, AlertCircle, Check } from 'lucide-react'
+import { Calendar, Plus, Trash2, Clock, User, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 export default function Turnos() {
   const [turnos, setTurnos] = useState([])
+  const [empleados, setEmpleados] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   
-  // Campos del nuevo turno
-  const [dia, setDia] = useState('Viernes')
+  // Formulario
+  const [dia, setDia] = useState('Lunes')
   const [horaInicio, setHoraInicio] = useState('08:00')
   const [horaFin, setHoraFin] = useState('16:00')
   const [empleado, setEmpleado] = useState('')
   const [notas, setNotas] = useState('')
   const [error, setError] = useState('')
 
-  const cargarTurnos = async () => {
+  useEffect(() => {
+    cargarDatos()
+  }, [])
+
+  const cargarDatos = async () => {
     setCargando(true)
-    const { data, error } = await supabase
+    setError('')
+
+    // 1. Cargar Turnos
+    const { data: turnosData, error: errTurnos } = await supabase
       .from('turnos')
       .select('*')
       .order('id', { ascending: true })
 
-    if (!error) setTurnos(data || [])
+    if (!errTurnos) setTurnos(turnosData || [])
+
+    // 2. Cargar Lista de Empleados / Usuarios desde perfiles
+    const { data: profilesData } = await supabase.from('perfiles').select('nombre').order('nombre')
+    
+    if (profilesData && profilesData.length > 0) {
+      const nombres = profilesData.map(p => p.nombre).filter(Boolean)
+      setEmpleados(nombres)
+      if (nombres.length > 0) setEmpleado(nombres[0])
+    } else {
+      // Lista fallback por si no existe tabla perfiles aún
+      const listaGenerica = ['Matias', 'Joaquin', 'Pablo', 'Empleado 1']
+      setEmpleados(listaGenerica)
+      setEmpleado(listaGenerica[0])
+    }
+
     setCargando(false)
   }
 
-  useEffect(() => {
-    cargarTurnos()
-  }, [])
-
-  // Crear un nuevo turno
   const handleCrearTurno = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (!empleado) {
+      setError('Por favor selecciona o ingresa un empleado.')
+      return
+    }
 
     const { error } = await supabase.from('turnos').insert({
       dia,
       hora_inicio: horaInicio,
       hora_fin: horaFin,
-      empleado: empleado.trim() || 'Sin Asignar',
+      empleado,
       notas: notas.trim() || null,
     })
 
@@ -50,24 +73,19 @@ export default function Turnos() {
       return
     }
 
-    // Limpiar campos
-    setEmpleado('')
     setNotas('')
     setMostrarForm(false)
-    cargarTurnos()
+    cargarDatos()
   }
 
-  // Eliminar un turno existente
   const handleEliminarTurno = async (id) => {
-    const confirmacion = window.confirm('¿Seguro que deseas eliminar este turno?')
-    if (!confirmacion) return
+    if (!window.confirm('¿Seguro que deseas eliminar este turno?')) return
 
     const { error } = await supabase.from('turnos').delete().eq('id', id)
-
     if (error) {
-      alert('Error al eliminar el turno: ' + error.message)
+      alert('Error al eliminar: ' + error.message)
     } else {
-      cargarTurnos()
+      cargarDatos()
     }
   }
 
@@ -91,7 +109,7 @@ export default function Turnos() {
           onClick={() => setMostrarForm(!mostrarForm)}
           className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs transition-all shadow-lg active:scale-[0.98] ${
             mostrarForm
-              ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+              ? 'bg-slate-800 text-slate-300 border border-slate-700'
               : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20'
           }`}
         >
@@ -100,7 +118,7 @@ export default function Turnos() {
         </button>
       </div>
 
-      {/* FORMULARIO CREAR TURNO */}
+      {/* FORMULARIO DE CREACIÓN */}
       {mostrarForm && (
         <form onSubmit={handleCrearTurno} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
           <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -129,14 +147,15 @@ export default function Turnos() {
 
             <div>
               <label className="text-[11px] font-semibold text-slate-400 uppercase">Empleado / Encargado</label>
-              <input
-                type="text"
-                required
+              <select
                 value={empleado}
                 onChange={(e) => setEmpleado(e.target.value)}
-                placeholder="Nombre del empleado..."
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
+                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              >
+                {empleados.map((emp) => (
+                  <option key={emp} value={emp}>{emp}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -162,7 +181,7 @@ export default function Turnos() {
             </div>
 
             <div className="sm:col-span-2">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Notas adicionales (Opcional)</label>
+              <label className="text-[11px] font-semibold text-slate-400 uppercase">Notas Adicionales (Opcional)</label>
               <input
                 type="text"
                 value={notas}
@@ -179,9 +198,9 @@ export default function Turnos() {
         </form>
       )}
 
-      {/* VISTA ORGANIZADA POR DÍAS (LUNES A DOMINGO) */}
+      {/* VISTA POR DÍAS (LUNES A DOMINGO) */}
       {cargando ? (
-        <div className="p-8 text-center text-slate-500 text-xs font-mono">Cargando cronograma de turnos...</div>
+        <div className="p-8 text-center text-slate-500 text-xs font-mono">Cargando turnos...</div>
       ) : (
         <div className="space-y-4">
           {DIAS_SEMANA.map((diaNombre) => {
@@ -192,7 +211,7 @@ export default function Turnos() {
                 <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
                   <h4 className="font-extrabold text-emerald-400 text-sm tracking-wide">{diaNombre}</h4>
                   <span className="text-[10px] font-mono text-slate-500 uppercase bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
-                    {turnosDelDia.length} {turnosDelDia.length === 1 ? 'Turno' : 'Turnos'}
+                    {turnosDelDia.length} TURNOS
                   </span>
                 </div>
 
@@ -219,7 +238,6 @@ export default function Turnos() {
                           )}
                         </div>
 
-                        {/* BOTÓN ELIMINAR TURNO */}
                         <button
                           onClick={() => handleEliminarTurno(t.id)}
                           className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all"
