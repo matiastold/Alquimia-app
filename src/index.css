@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   :root {
@@ -8,7 +6,11 @@
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased min-h-screen overflow-x-hidden;
+    background-color: #030712; /* Slate-950 equivalente */
+    color: #f1f5f9; /* Slate-100 equivalente */
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -32,9 +34,10 @@
   }
 }
 
-/* Clases de Utilidad y compatibilidad con variantes Glassmorphism */
-@layer components {
-  .card-glass {
-    @apply bg-slate-900/80 border border-slate-800/80 backdrop-blur-xl rounded-3xl shadow-xl;
-  }
+.card-glass {
+  background-color: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(30, 41, 59, 0.8);
+  backdrop-filter: blur(24px);
+  border-radius: 1.5rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
 }

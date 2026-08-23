@@ -34,3 +34,21 @@ export async function verificarLogroDiasTrabajados(empleadoId, nombre) {
 
   return `¡Felicidades ${nombre}! Llegaste a ${mayor} días trabajados`
 }
+
+// FUNCIÓN REQUERIDA POR VENTAS.JSX
+export async function verificarLogrosVentas(empleadoId) {
+  try {
+    const { data, error } = await supabase
+      .from('ventas')
+      .select('id')
+      .eq('empleado_id', empleadoId)
+
+    if (error || !data) return null
+
+    // Lógica opcional de logros por ventas acumuladas
+    return null
+  } catch (err) {
+    console.error('Error al verificar logros de ventas:', err)
+    return null
+  }
+}
