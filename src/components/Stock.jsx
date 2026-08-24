@@ -1,26 +1,26 @@
 import { useState, useEffect } from 'react'
-import { Package, Search, Plus, X, AlertTriangle, Tag, FolderPlus, ArrowRightLeft } from 'lucide-react'
+import { Package, Plus, FolderPlus, Folder, ArrowLeft, Search, Edit, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 export default function Stock() {
-  const [productos, setProductos] = useState([])
   const [categorias, setCategorias] = useState([])
+  const [productos, setProductos] = useState([])
   const [cargando, setCargando] = useState(true)
-  const [mostrarForm, setMostrarForm] = useState(false)
-  const [mostrarNuevaCat, setMostrarNuevaCat] = useState(false)
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null)
   
-  // Campos del Formulario
-  const [nombre, setNombre] = useState('')
-  const [categoria, setCategoria] = useState('General')
-  const [nuevaCatNombre, setNuevaCatNombre] = useState('')
-  const [precioCompra, setPrecioCompra] = useState('')
-  const [precio, setPrecio] = useState('')
-  const [stockActual, setStockActual] = useState('')
-  const [stockMinimo, setStockMinimo] = useState('5')
-  
-  const [error, setError] = useState('')
+  // Modales y Búsqueda
   const [busqueda, setBusqueda] = useState('')
-  const [categoriaFiltro, setCategoriaFiltro] = useState('Todas')
+  const [mostrarModalProd, setMostrarModalProd] = useState(false)
+  const [mostrarModalCat, setMostrarModalCat] = useState(false)
+
+  // Formulario Producto
+  const [nombreProd, setNombreProd] = useState('')
+  const [precioProd, setPrecioProd] = useState('')
+  const [stockProd, setStockProd] = useState('')
+  const [catProd, setCatProd] = useState('General')
+
+  // Formulario Categoría
+  const [nombreNuevaCat, setNombreNuevaCat] = useState('')
 
   useEffect(() => {
     cargarDatos()
@@ -28,104 +28,82 @@ export default function Stock() {
 
   const cargarDatos = async () => {
     setCargando(true)
-    // 1. Cargar Categorías
+
+    // Cargar Categorías
     const { data: catData } = await supabase.from('categorias').select('*').order('nombre')
-    if (catData && catData.length > 0) {
-      setCategorias(catData.map(c => c.nombre))
-    } else {
-      setCategorias(['General', 'Librería', 'Perfumería'])
+    
+    // Cargar Productos
+    const { data: prodData } = await supabase.from('productos').select('*').order('nombre')
+
+    const listaCats = catData || []
+    // Garantizar que la categoría 'General' siempre exista en la lista
+    if (!listaCats.some(c => c.nombre.toLowerCase() === 'general')) {
+      listaCats.unshift({ id: 'general', nombre: 'General' })
     }
 
-    // 2. Cargar Productos
-    const { data, error } = await supabase
-      .from('productos')
-      .select('*')
-      .order('nombre', { ascending: true })
-
-    if (error) setError(error.message)
-    else setProductos(data || [])
+    setCategorias(listaCats)
+    setProductos(prodData || [])
     setCargando(false)
   }
 
-  // Mover producto de categoría
-  const moverDeCategoria = async (productoId, nuevaCategoria) => {
-    const { error } = await supabase
-      .from('productos')
-      .update({ categoria: nuevaCategoria })
-      .eq('id', productoId)
-
-    if (error) setError(error.message)
-    else cargarDatos()
+  // Modificar Stock rápido (+ / -)
+  const handleAjustarStock = async (id, stockActual, cambio) => {
+    const nuevoStock = Math.max(0, stockActual + cambio)
+    setProductos(prev => prev.map(p => p.id === id ? { ...p, stock: nuevoStock } : p))
+    await supabase.from('productos').update({ stock: nuevoStock }).eq('id', id)
   }
 
-  // Crear nueva categoría dinámicamente
+  // Crear Producto
+  const handleCrearProducto = async (e) => {
+    e.preventDefault()
+    const nuevaCat = catProd || 'General'
+
+    const { data, error } = await supabase.from('productos').insert({
+      nombre: nombreProd.trim(),
+      precio: parseFloat(precioProd) || 0,
+      stock: parseInt(stockProd) || 0,
+      categoria: nuevaCat
+    }).select()
+
+    if (!error && data) {
+      setProductos([...productos, ...data])
+      setMostrarModalProd(false)
+      setNombreProd('')
+      setPrecioProd('')
+      setStockProd('')
+    }
+  }
+
+  // Crear Categoría
   const handleCrearCategoria = async (e) => {
     e.preventDefault()
-    if (!nuevaCatNombre.trim()) return
+    if (!nombreNuevaCat.trim()) return
 
-    const { error } = await supabase
-      .from('categorias')
-      .insert([{ nombre: nuevaCatNombre.trim() }])
+    const { data, error } = await supabase.from('categorias').insert({
+      nombre: nombreNuevaCat.trim()
+    }).select()
 
-    if (!error) {
-      setCategorias(prev => [...prev, nuevaCatNombre.trim()])
-      setCategoria(nuevaCatNombre.trim())
-      setNuevaCatNombre('')
-      setMostrarNuevaCat(false)
-    } else {
-      setError("La categoría ya existe o hubo un error.")
+    if (!error && data) {
+      setCategorias([...categorias, ...data])
+      setMostrarModalCat(false)
+      setNombreNuevaCat('')
     }
   }
 
-  // Crear producto
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-
-    const { error } = await supabase.from('productos').insert({
-      nombre,
-      categoria: categoria || 'General',
-      precio_compra: precioCompra ? parseFloat(precioCompra) : null,
-      precio: parseFloat(precio),
-      stock_actual: parseInt(stockActual, 10),
-      stock_minimo: parseInt(stockMinimo, 10),
-    })
-
-    if (error) {
-      setError(error.message)
-      return
-    }
-
-    setNombre('')
-    setPrecioCompra('')
-    setPrecio('')
-    setStockActual('')
-    setStockMinimo('5')
-    setMostrarForm(false)
-    cargarDatos()
+  // Mover producto a otra categoría
+  const handleMoverCategoria = async (prodId, nuevaCat) => {
+    setProductos(prev => prev.map(p => p.id === prodId ? { ...p, categoria: nuevaCat } : p))
+    await supabase.from('productos').update({ categoria: nuevaCat }).eq('id', prodId)
   }
 
-  const ajustarStock = async (producto, cambio) => {
-    const nuevoStock = producto.stock_actual + cambio
-    if (nuevoStock < 0) return
-
-    const { error } = await supabase
-      .from('productos')
-      .update({ stock_actual: nuevoStock })
-      .eq('id', producto.id)
-
-    if (error) setError(error.message)
-    else cargarDatos()
-  }
-
-  // BÚSQUEDA GLOBAL: Si hay texto en 'busqueda', ignora el filtro de categoría seleccionada
-  const productosFiltrados = productos.filter((p) => {
+  // Filtrado de productos dentro de una categoría o por búsqueda
+  const productosFiltrados = productos.filter(p => {
     const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    if (busqueda.trim() !== '') {
-      return coincideBusqueda
-    }
-    if (categoriaFiltro === 'Todas') return true
-    return (p.categoria || 'General') === categoriaFiltro
+    if (busqueda.trim() !== '') return coincideBusqueda
+    
+    // Si no hay búsqueda, se muestran solo los productos de la categoría seleccionada
+    const catProducto = p.categoria || 'General'
+    return catProducto.toLowerCase() === (categoriaSeleccionada?.nombre || 'general').toLowerCase()
   })
 
   return (
@@ -140,238 +118,246 @@ export default function Stock() {
             Gestión de Stock
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Categorización de productos e inventario global
+            Organización de productos por categorías
           </p>
         </div>
 
         <div className="flex gap-2">
           <button
-            onClick={() => setMostrarNuevaCat(!mostrarNuevaCat)}
-            className="flex items-center gap-2 px-4 py-3 bg-slate-800 text-slate-200 border border-slate-700/80 rounded-2xl font-bold text-xs hover:bg-slate-700 active:scale-95 transition-all"
+            onClick={() => setMostrarModalCat(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 border border-slate-800 text-slate-200 rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all"
           >
-            <FolderPlus size={16} className="text-emerald-400" /> Nueva Cat.
+            <FolderPlus size={16} className="text-emerald-400" />
+            Nueva Cat.
           </button>
-
           <button
-            onClick={() => setMostrarForm(!mostrarForm)}
-            className={`flex items-center justify-center gap-2 px-5 py-3 rounded-2xl font-bold text-xs transition-all shadow-lg active:scale-[0.98] ${
-              mostrarForm
-                ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
-                : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-emerald-500/20'
-            }`}
+            onClick={() => setMostrarModalProd(true)}
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-slate-950 rounded-2xl font-bold text-xs hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20"
           >
-            {mostrarForm ? <X size={16} /> : <Plus size={16} />}
-            {mostrarForm ? 'Cancelar' : 'Nuevo Producto'}
+            <Plus size={16} />
+            Nuevo Producto
           </button>
         </div>
       </div>
 
-      {/* MODAL / FORMULARIO CREAR CATEGORÍA */}
-      {mostrarNuevaCat && (
-        <form onSubmit={handleCrearCategoria} className="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex gap-2 items-center">
-          <input
-            type="text"
-            placeholder="Nombre de la nueva categoría (ej: Perfumería)..."
-            value={nuevaCatNombre}
-            onChange={(e) => setNuevaCatNombre(e.target.value)}
-            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          />
-          <button type="submit" className="px-4 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs">
-            Crear
-          </button>
-        </form>
-      )}
+      {/* BUSCADOR GLOBAL */}
+      <div className="relative">
+        <Search size={18} className="absolute left-4 top-3.5 text-slate-500" />
+        <input
+          type="text"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar producto globalmente en el inventario..."
+          className="w-full bg-slate-900 border border-slate-800/80 rounded-2xl pl-11 pr-4 py-3 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
+        />
+      </div>
 
-      {/* FORMULARIO CREAR PRODUCTO */}
-      {mostrarForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
-          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider mb-2 flex items-center gap-2">
-            <Plus size={14} className="text-emerald-400" /> Agregar Producto Al Inventario
+      {/* VISTA 1: CARDS DE CATEGORÍAS (Si no hay búsqueda activa y no se seleccionó categoría) */}
+      {!categoriaSeleccionada && busqueda.trim() === '' ? (
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+            Categorías Disponibles
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="sm:col-span-2">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Nombre del Producto</label>
-              <input
-                type="text"
-                required
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                placeholder="Ej. Cuaderno A4 / Perfume Hugo Boss"
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {categorias.map((cat) => {
+              const cantidadProd = productos.filter(
+                (p) => (p.categoria || 'General').toLowerCase() === cat.nombre.toLowerCase()
+              ).length
 
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Categoría</label>
-              <select
-                value={categoria}
-                onChange={(e) => setCategoria(e.target.value)}
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              return (
+                <button
+                  key={cat.id || cat.nombre}
+                  onClick={() => setCategoriaSeleccionada(cat)}
+                  className="bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 p-4 rounded-2xl flex flex-col justify-between text-left transition-all active:scale-[0.98] shadow-md group"
+                >
+                  <div className="flex items-center justify-between w-full mb-3">
+                    <div className="p-2.5 bg-slate-950 border border-slate-800 rounded-xl text-emerald-400 group-hover:scale-105 transition-transform">
+                      <Folder size={20} />
+                    </div>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-md">
+                      {cantidadProd} prod.
+                    </span>
+                  </div>
+
+                  <div>
+                    <h4 className="font-bold text-slate-100 text-sm group-hover:text-emerald-400 transition-colors capitalize">
+                      {cat.nombre}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Ver artículos</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        /* VISTA 2: LISTA DE PRODUCTOS DENTRO DE LA CATEGORÍA */
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                setCategoriaSeleccionada(null)
+                setBusqueda('')
+              }}
+              className="flex items-center gap-2 text-xs font-bold text-emerald-400 bg-slate-900/80 border border-slate-800 px-3.5 py-2 rounded-xl hover:bg-slate-800 transition-all"
+            >
+              <ArrowLeft size={16} />
+              Volver a Categorías
+            </button>
+
+            <span className="text-xs font-semibold text-slate-400 capitalize">
+              {busqueda ? `Resultados para: "${busqueda}"` : `Categoría: ${categoriaSeleccionada?.nombre}`}
+            </span>
+          </div>
+
+          {productosFiltrados.length === 0 ? (
+            <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-8 text-center text-slate-500 text-xs">
+              No hay productos registrados en esta categoría.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {productosFiltrados.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-lg"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <h4 className="font-bold text-slate-100 text-sm capitalize">{p.nombre}</h4>
+                      <div className="mt-1">
+                        <select
+                          value={p.categoria || 'General'}
+                          onChange={(e) => handleMoverCategoria(p.id, e.target.value)}
+                          className="text-[10px] bg-slate-950 text-slate-400 border border-slate-800 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+                        >
+                          {categorias.map((c) => (
+                            <option key={c.id || c.nombre} value={c.nombre}>{c.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <span className="text-emerald-400 font-bold text-sm font-mono">${p.precio}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-950 border border-slate-800/80 rounded-xl p-2">
+                    <span className="text-[11px] text-slate-400 font-medium pl-2">Stock:</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleAjustarStock(p.id, p.stock, -1)}
+                        className="w-7 h-7 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
+                      >
+                        -
+                      </button>
+                      <span className="font-mono text-xs font-bold text-slate-100 w-6 text-center">{p.stock}</span>
+                      <button
+                        onClick={() => handleAjustarStock(p.id, p.stock, 1)}
+                        className="w-7 h-7 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL NUEVA CATEGORÍA */}
+      {mostrarModalCat && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleCrearCategoria} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <FolderPlus size={18} className="text-emerald-400" /> Crear Categoría
+            </h3>
+            <input
+              type="text"
+              required
+              value={nombreNuevaCat}
+              onChange={(e) => setNombreNuevaCat(e.target.value)}
+              placeholder="Nombre de la categoría (ej. Kiosco)"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setMostrarModalCat(false)}
+                className="flex-1 py-2.5 bg-slate-800 text-slate-300 font-bold rounded-xl text-xs"
               >
-                {categorias.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs"
+              >
+                Guardar
+              </button>
             </div>
+          </form>
+        </div>
+      )}
 
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Precio Venta</label>
+      {/* MODAL NUEVO PRODUCTO */}
+      {mostrarModalProd && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <form onSubmit={handleCrearProducto} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 w-full max-w-sm space-y-3 shadow-2xl">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <Plus size={18} className="text-emerald-400" /> Nuevo Producto
+            </h3>
+            <input
+              type="text"
+              required
+              value={nombreProd}
+              onChange={(e) => setNombreProd(e.target.value)}
+              placeholder="Nombre del producto"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            />
+            <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
                 step="0.01"
                 required
-                value={precio}
-                onChange={(e) => setPrecio(e.target.value)}
-                placeholder="0.00"
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={precioProd}
+                onChange={(e) => setPrecioProd(e.target.value)}
+                placeholder="Precio ($)"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
               />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Stock Inicial</label>
               <input
                 type="number"
                 required
-                value={stockActual}
-                onChange={(e) => setStockActual(e.target.value)}
-                placeholder="0"
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                value={stockProd}
+                onChange={(e) => setStockProd(e.target.value)}
+                placeholder="Stock Inicial"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
               />
             </div>
-
-            <div>
-              <label className="text-[11px] font-semibold text-slate-400 uppercase">Stock Mínimo</label>
-              <input
-                type="number"
-                required
-                value={stockMinimo}
-                onChange={(e) => setStockMinimo(e.target.value)}
-                placeholder="5"
-                className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-          </div>
-
-          <button type="submit" className="w-full py-3 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-emerald-500/10">
-            Guardar Producto
-          </button>
-        </form>
-      )}
-
-      {/* BUSCADOR GLOBAL Y SELECTOR DE CATEGORÍAS */}
-      <div className="space-y-3">
-        <div className="relative">
-          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="🔍 Buscar producto en TODAS las categorías..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-2xl pl-10 pr-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 text-xs font-medium"
-          />
-        </div>
-
-        {/* Pestañas de categorías (Ocultas visualmente mientras se escribe en el buscador) */}
-        {busqueda.trim() === '' && (
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            <button
-              onClick={() => setCategoriaFiltro('Todas')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                categoriaFiltro === 'Todas'
-                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800'
-              }`}
+            <select
+              value={catProd}
+              onChange={(e) => setCatProd(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
             >
-              Todas
-            </button>
-            {categorias.map((c) => (
+              {categorias.map((c) => (
+                <option key={c.id || c.nombre} value={c.nombre}>{c.nombre}</option>
+              ))}
+            </select>
+            <div className="flex gap-2 pt-2">
               <button
-                key={c}
-                onClick={() => setCategoriaFiltro(c)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                  categoriaFiltro === c
-                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:bg-slate-800'
-                }`}
+                type="button"
+                onClick={() => setMostrarModalProd(false)}
+                className="flex-1 py-2.5 bg-slate-800 text-slate-300 font-bold rounded-xl text-xs"
               >
-                {c}
+                Cancelar
               </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* TARJETAS DE PRODUCTOS */}
-      {cargando ? (
-        <div className="p-8 text-center text-slate-500 text-xs font-mono">Cargando inventario...</div>
-      ) : productosFiltrados.length === 0 ? (
-        <div className="p-8 text-center bg-slate-900/40 border border-slate-800 rounded-3xl text-slate-400 text-xs">
-          No hay productos disponibles.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {productosFiltrados.map((p) => {
-            const bajo = p.stock_actual <= p.stock_minimo
-            return (
-              <div
-                key={p.id}
-                className={`bg-slate-900/80 border p-4 rounded-2xl flex flex-col justify-between gap-3 ${
-                  bajo ? 'border-rose-500/30' : 'border-slate-800/80'
-                }`}
+              <button
+                type="submit"
+                className="flex-1 py-2.5 bg-emerald-500 text-slate-950 font-bold rounded-xl text-xs"
               >
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <h4 className="font-bold text-slate-100 text-sm">{p.nombre}</h4>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <Tag size={12} className="text-emerald-400" />
-                      <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                        {p.categoria || 'General'}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="font-mono text-emerald-400 font-extrabold text-base">${p.precio}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/60">
-                  {/* SELECTOR RÁPIDO PARA MOVER CATEGORÍA */}
-                  <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800">
-                    <ArrowRightLeft size={12} className="text-slate-400" />
-                    <select
-                      value={p.categoria || 'General'}
-                      onChange={(e) => moverDeCategoria(p.id, e.target.value)}
-                      className="bg-transparent text-[11px] text-slate-300 font-medium focus:outline-none cursor-pointer"
-                    >
-                      {categorias.map((cat) => (
-                        <option key={cat} value={cat} className="bg-slate-900 text-slate-200">
-                          Mover a {cat}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* CONTROLES DE STOCK */}
-                  <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <button
-                      onClick={() => ajustarStock(p, -1)}
-                      className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center justify-center font-bold text-sm"
-                    >
-                      -
-                    </button>
-                    <span className={`font-mono text-xs font-bold px-1 ${bajo ? 'text-rose-400' : 'text-slate-100'}`}>
-                      {p.stock_actual}
-                    </span>
-                    <button
-                      onClick={() => ajustarStock(p, 1)}
-                      className="w-7 h-7 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 flex items-center justify-center font-bold text-sm"
-                    >
-                      +
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+                Guardar
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

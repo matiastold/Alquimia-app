@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Plus, Trash2, Clock, User, AlertCircle } from 'lucide-react'
+import { Calendar, Plus, Trash2, Clock, User, AlertCircle, PlayCircle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -9,6 +9,7 @@ export default function Turnos() {
   const [empleados, setEmpleados] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
+  const [ahora, setAhora] = useState(new Date())
   
   // Formulario
   const [dia, setDia] = useState('Lunes')
@@ -18,6 +19,12 @@ export default function Turnos() {
   const [notas, setNotas] = useState('')
   const [error, setError] = useState('')
 
+  // Reloj en tiempo real
+  useEffect(() => {
+    const timer = setInterval(() => setAhora(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
   useEffect(() => {
     cargarDatos()
   }, [])
@@ -26,7 +33,6 @@ export default function Turnos() {
     setCargando(true)
     setError('')
 
-    // 1. Cargar Turnos
     const { data: turnosData, error: errTurnos } = await supabase
       .from('turnos')
       .select('*')
@@ -34,7 +40,6 @@ export default function Turnos() {
 
     if (!errTurnos) setTurnos(turnosData || [])
 
-    // 2. Cargar Lista de Empleados / Usuarios desde perfiles
     const { data: profilesData } = await supabase.from('perfiles').select('nombre').order('nombre')
     
     if (profilesData && profilesData.length > 0) {
@@ -42,8 +47,7 @@ export default function Turnos() {
       setEmpleados(nombres)
       if (nombres.length > 0) setEmpleado(nombres[0])
     } else {
-      // Lista fallback por si no existe tabla perfiles aún
-      const listaGenerica = ['Matias', 'Joaquin', 'Pablo', 'Empleado 1']
+      const listaGenerica = ['Matías Toledo', 'Joaquín Lazarte', 'Pablo Fernández']
       setEmpleados(listaGenerica)
       setEmpleado(listaGenerica[0])
     }
@@ -56,7 +60,7 @@ export default function Turnos() {
     setError('')
 
     if (!empleado) {
-      setError('Por favor selecciona o ingresa un empleado.')
+      setError('Selecciona un empleado para asignar el turno.')
       return
     }
 
@@ -89,6 +93,11 @@ export default function Turnos() {
     }
   }
 
+  // Nombre del día actual traducido para comparar
+  const diasMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+  const diaActualNombre = diasMap[ahora.getDay()]
+  const horaActualStr = ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
       {/* HEADER */}
@@ -101,7 +110,7 @@ export default function Turnos() {
             Gestión de Turnos
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Planificación semanal de horarios para el personal
+            Control de horarios y seguimiento de personal en tiempo real
           </p>
         </div>
 
@@ -118,7 +127,26 @@ export default function Turnos() {
         </button>
       </div>
 
-      {/* FORMULARIO DE CREACIÓN */}
+      {/* WIDGET CRONÓMETRO / RELOJ EN VIVO */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-emerald-500/30 p-5 rounded-3xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="space-y-1 text-center sm:text-left">
+          <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400 flex items-center justify-center sm:justify-start gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Control de Jornada en Vivo
+          </span>
+          <p className="text-xs text-slate-300 font-medium">
+            Hoy es <span className="font-bold text-slate-100">{diaActualNombre}</span>
+          </p>
+        </div>
+
+        <div className="bg-slate-950 border border-slate-800 px-5 py-2.5 rounded-2xl text-center shadow-inner">
+          <span className="font-mono text-2xl font-extrabold text-emerald-400 tracking-wider">
+            {horaActualStr}
+          </span>
+        </div>
+      </div>
+
+      {/* FORMULARIO CREAR TURNO */}
       {mostrarForm && (
         <form onSubmit={handleCrearTurno} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
           <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
@@ -198,18 +226,33 @@ export default function Turnos() {
         </form>
       )}
 
-      {/* VISTA POR DÍAS (LUNES A DOMINGO) */}
+      {/* CRONOGRAMA DE TURNOS POR DÍA */}
       {cargando ? (
         <div className="p-8 text-center text-slate-500 text-xs font-mono">Cargando turnos...</div>
       ) : (
         <div className="space-y-4">
           {DIAS_SEMANA.map((diaNombre) => {
             const turnosDelDia = turnos.filter((t) => t.dia === diaNombre)
+            const esHoy = diaNombre === diaActualNombre
 
             return (
-              <div key={diaNombre} className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 space-y-3">
+              <div 
+                key={diaNombre} 
+                className={`border rounded-2xl p-4 space-y-3 transition-all ${
+                  esHoy ? 'bg-slate-900/90 border-emerald-500/40 shadow-lg shadow-emerald-500/5' : 'bg-slate-900/50 border-slate-800/80'
+                }`}
+              >
                 <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
-                  <h4 className="font-extrabold text-emerald-400 text-sm tracking-wide">{diaNombre}</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className={`font-extrabold text-sm tracking-wide ${esHoy ? 'text-emerald-400' : 'text-slate-200'}`}>
+                      {diaNombre}
+                    </h4>
+                    {esHoy && (
+                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold uppercase rounded-md">
+                        Hoy
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] font-mono text-slate-500 uppercase bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
                     {turnosDelDia.length} TURNOS
                   </span>
@@ -225,7 +268,7 @@ export default function Turnos() {
                         className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex justify-between items-center gap-2"
                       >
                         <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-200">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-100">
                             <User size={13} className="text-emerald-400" />
                             <span>{t.empleado}</span>
                           </div>
