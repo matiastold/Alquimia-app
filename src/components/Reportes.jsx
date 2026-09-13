@@ -18,9 +18,17 @@ export default function Reportes() {
     setCargando(true)
     setError('')
 
+    const ahora = new Date()
+    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
+    const inicioMesISO = inicioMes.toISOString()
+    const inicioMesFecha = inicioMesISO.slice(0, 10)
+
+    // Todo lo que sigue está SIEMPRE acotado al mes en curso — se reinicia solo
+    // el día 1 de cada mes, sin necesidad de borrar nada a mano.
     const { data: ventas, error: errorVentas } = await supabase
       .from('ventas')
       .select('id, total, vendedor_id, created_at, metodo_pago, perfiles(nombre)')
+      .gte('created_at', inicioMesISO)
 
     if (errorVentas) {
       setError(errorVentas.message)
@@ -37,14 +45,15 @@ export default function Reportes() {
       const nombre = v.perfiles?.nombre || 'Sin nombre'
       porEmpleado[nombre] = (porEmpleado[nombre] || 0) + Number(v.total)
     })
-    setVentasPorEmpleado(
-      Object.entries(porEmpleado)
-        .map(([nombre, total]) => ({ nombre, total }))
-        .sort((a, b) => b.total - a.total)
-    )
+    const rankingPorEmpleado = Object.entries(porEmpleado)
+      .map(([nombre, total]) => ({ nombre, total }))
+      .sort((a, b) => b.total - a.total)
 
-    // Caja de hoy por método de pago
-    const hoy = new Date().toISOString().slice(0, 10)
+    setVentasPorEmpleado(rankingPorEmpleado)
+    setRankingVentasMes(rankingPorEmpleado)
+
+    // Caja de HOY (esto sí es diario, no mensual — se ve el movimiento del día)
+    const hoy = ahora.toISOString().slice(0, 10)
     const ventasHoy = ventas.filter((v) => v.created_at.slice(0, 10) === hoy)
     const caja = { efectivo: 0, transferencia: 0, anotacion: 0 }
     ventasHoy.forEach((v) => {
@@ -54,14 +63,21 @@ export default function Reportes() {
     })
     setCajaHoy(caja)
 
-    const { data: items, error: errorItems } = await supabase
-      .from('venta_items')
-      .select('cantidad, precio_unitario, producto_id, productos(nombre, categoria)')
+    // Items vendidos, pero solo de las ventas de este mes
+    const idsVentasMes = ventas.map((v) => v.id)
+    let items = []
+    if (idsVentasMes.length > 0) {
+      const { data: itemsData, error: errorItems } = await supabase
+        .from('venta_items')
+        .select('cantidad, precio_unitario, producto_id, venta_id, productos(nombre, categoria)')
+        .in('venta_id', idsVentasMes)
 
-    if (errorItems) {
-      setError(errorItems.message)
-      setCargando(false)
-      return
+      if (errorItems) {
+        setError(errorItems.message)
+        setCargando(false)
+        return
+      }
+      items = itemsData || []
     }
 
     const porProducto = {}
@@ -88,46 +104,18 @@ export default function Reportes() {
         .sort((a, b) => b.total - a.total)
     )
 
-    // Ranking del mes actual
-    const ahora = new Date()
-    const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1)
-
-    const ventasDelMes = ventas.filter((v) => new Date(v.created_at) >= inicioMes)
-    const porEmpleadoMes = {}
-    ventasDelMes.forEach((v) => {
-      const nombre = v.perfiles?.nombre || 'Sin nombre'
-      porEmpleadoMes[nombre] = (porEmpleadoMes[nombre] || 0) + Number(v.total)
-    })
-    setRankingVentasMes(
-      Object.entries(porEmpleadoMes)
-        .map(([nombre, total]) => ({ nombre, total }))
-        .sort((a, b) => b.total - a.total)
-    )
-
+    // Horas trabajadas del mes: todos los tipos de asistencia (fijo, fantasma, día)
+    // ya guardan su duración real medida por el servidor — no hace falta estimarla.
     const { data: asistencias, error: errorAsist } = await supabase
       .from('asistencias')
-      .select('empleado_id, tipo, fecha, duracion_minutos, perfiles(nombre)')
+      .select('empleado_id, duracion_minutos, perfiles(nombre)')
+      .gte('fecha', inicioMesFecha)
 
     if (!errorAsist && asistencias) {
-      const inicioMesStr = inicioMes.toISOString().slice(0, 10)
-      const asistenciasDelMes = asistencias.filter((a) => a.fecha >= inicioMesStr)
-
-      const { data: turnosFijos } = await supabase.from('turnos').select('empleado_id, hora_inicio, hora_fin')
-
-      const minutosDeUnTurnoFijo = (empleadoId) => {
-        const turno = turnosFijos?.find((t) => t.empleado_id === empleadoId)
-        if (!turno) return 0
-        const [h1, m1] = turno.hora_inicio.split(':').map(Number)
-        const [h2, m2] = turno.hora_fin.split(':').map(Number)
-        return h2 * 60 + m2 - (h1 * 60 + m1)
-      }
-
       const porEmpleadoHoras = {}
-      asistenciasDelMes.forEach((a) => {
+      asistencias.forEach((a) => {
         const nombre = a.perfiles?.nombre || 'Sin nombre'
-        const minutos =
-          a.tipo === 'fantasma' ? a.duracion_minutos || 0 : minutosDeUnTurnoFijo(a.empleado_id)
-        porEmpleadoHoras[nombre] = (porEmpleadoHoras[nombre] || 0) + minutos
+        porEmpleadoHoras[nombre] = (porEmpleadoHoras[nombre] || 0) + (a.duracion_minutos || 0)
       })
 
       setRankingHorasMes(
@@ -168,7 +156,6 @@ export default function Reportes() {
 
   return (
     <div className="space-y-8 pb-20 lg:pb-6">
-      {/* HEADER PRINCIPAL */}
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
           <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400">
@@ -176,12 +163,11 @@ export default function Reportes() {
           </div>
           Dashboard de Analytics
         </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Rendimiento comercial, flujo de caja diario e indicadores clave
+        <p className="text-xs text-slate-400 mt-1 capitalize">
+          Rendimiento comercial de {nombreMes} — se reinicia el día 1 de cada mes
         </p>
       </div>
 
-      {/* TARJETAS KPI DE MÉTRICAS GENERALES */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-3xl p-5 backdrop-blur-md relative overflow-hidden">
           <div className="flex items-center justify-between">
@@ -195,7 +181,9 @@ export default function Reportes() {
           <p className="text-3xl font-extrabold font-mono text-slate-100 mt-3">
             ${totalVentas.toFixed(2)}
           </p>
-          <span className="text-[10px] text-slate-500 font-medium mt-1 block">Acumulado histórico</span>
+          <span className="text-[10px] text-slate-500 font-medium mt-1 block capitalize">
+            Este mes ({nombreMes})
+          </span>
         </div>
 
         <div className="bg-slate-800/60 border border-slate-700/50 rounded-3xl p-5 backdrop-blur-md relative overflow-hidden">
@@ -210,11 +198,10 @@ export default function Reportes() {
           <p className="text-3xl font-extrabold font-mono text-slate-100 mt-3">
             {cantidadVentas}
           </p>
-          <span className="text-[10px] text-slate-500 font-medium mt-1 block">Transacciones concretadas</span>
+          <span className="text-[10px] text-slate-500 font-medium mt-1 block">Transacciones este mes</span>
         </div>
       </div>
 
-      {/* ARQUEO DE CAJA DE HOY */}
       <div className="space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
           <Wallet size={16} className="text-emerald-400" /> Arqueo de Caja de Hoy
@@ -241,16 +228,14 @@ export default function Reportes() {
         </div>
       </div>
 
-      {/* GRÁFICOS DINÁMICOS: PRODUCTOS Y CATEGORÍAS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Productos Más Vendidos */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-3xl p-5 space-y-4 backdrop-blur-md">
           <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
             <Package size={16} className="text-emerald-400" /> Productos más vendidos
           </h3>
 
           {topProductos.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-6">Sin ventas registradas.</p>
+            <p className="text-xs text-slate-500 text-center py-6">Sin ventas este mes.</p>
           ) : (
             <div className="space-y-3">
               {topProductos.map((p) => {
@@ -274,14 +259,13 @@ export default function Reportes() {
           )}
         </div>
 
-        {/* Ventas por Categoría */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-3xl p-5 space-y-4 backdrop-blur-md">
           <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
             <Tag size={16} className="text-blue-400" /> Ventas por Categoría
           </h3>
 
           {ventasPorCategoria.length === 0 ? (
-            <p className="text-xs text-slate-500 text-center py-6">Sin ventas registradas.</p>
+            <p className="text-xs text-slate-500 text-center py-6">Sin ventas este mes.</p>
           ) : (
             <div className="space-y-3">
               {ventasPorCategoria.map((c) => {
@@ -306,13 +290,12 @@ export default function Reportes() {
         </div>
       </div>
 
-      {/* VENTAS HISTÓRICAS POR EMPLEADO */}
       <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl p-5 space-y-3 backdrop-blur-md">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Ventas por Empleado (Histórico)
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 capitalize">
+          Ventas por Empleado ({nombreMes})
         </h3>
         {ventasPorEmpleado.length === 0 ? (
-          <p className="text-xs text-slate-500 text-center py-4">Sin registro de ventas.</p>
+          <p className="text-xs text-slate-500 text-center py-4">Sin ventas este mes.</p>
         ) : (
           <div className="divide-y divide-slate-700/40">
             {ventasPorEmpleado.map((e) => (
@@ -325,14 +308,12 @@ export default function Reportes() {
         )}
       </div>
 
-      {/* PODIOS RANKING DEL MES */}
       <div className="space-y-4">
         <h3 className="text-lg font-bold text-slate-100 capitalize flex items-center gap-2">
           <Trophy size={20} className="text-amber-400" /> Rankings de {nombreMes}
         </h3>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Más Ventas del Mes */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-3xl p-5 space-y-3 backdrop-blur-md">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <TrendingUp size={14} className="text-emerald-400" /> Líderes en Ventas
@@ -368,7 +349,6 @@ export default function Reportes() {
             )}
           </div>
 
-          {/* Más Horas Trabajadas del Mes */}
           <div className="bg-slate-800/60 border border-slate-700/50 rounded-3xl p-5 space-y-3 backdrop-blur-md">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Clock size={14} className="text-blue-400" /> Líderes en Horas Trabajadas
