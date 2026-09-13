@@ -1,11 +1,56 @@
 import { useState, useEffect } from 'react'
-import { BookOpen, ArrowLeft, Search, Plus, CheckCircle2, DollarSign, Calendar, AlertCircle } from 'lucide-react'
+import {
+  BookOpen, ArrowLeft, Search, Plus, CheckCircle2, Calendar, AlertCircle, Download,
+} from 'lucide-react'
+import jsPDF from 'jspdf'
 import { supabase } from '../lib/supabaseClient'
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
+
+function generarBoletaPDF({ nombreCliente, mesLabel, anio, items, total }) {
+  const doc = new jsPDF()
+
+  doc.setFontSize(18)
+  doc.text('Alquimia', 14, 20)
+  doc.setFontSize(11)
+  doc.text(`Boleta de cuenta — ${mesLabel} ${anio}`, 14, 28)
+  doc.text(`Cliente: ${nombreCliente}`, 14, 36)
+
+  let y = 48
+  doc.setFontSize(9)
+  doc.setFont(undefined, 'bold')
+  doc.text('Fecha', 14, y)
+  doc.text('Detalle', 45, y)
+  doc.text('Monto', 196, y, { align: 'right' })
+  doc.setFont(undefined, 'normal')
+  y += 4
+  doc.line(14, y, 196, y)
+  y += 6
+
+  items.forEach((m) => {
+    if (y > 275) {
+      doc.addPage()
+      y = 20
+    }
+    doc.text(m.fecha, 14, y)
+    const desc = m.descripcion.length > 60 ? m.descripcion.slice(0, 57) + '...' : m.descripcion
+    doc.text(desc, 45, y)
+    doc.text(`$${Number(m.monto).toFixed(2)}`, 196, y, { align: 'right' })
+    y += 7
+  })
+
+  y += 3
+  doc.line(14, y, 196, y)
+  y += 9
+  doc.setFontSize(13)
+  doc.setFont(undefined, 'bold')
+  doc.text(`Total a abonar: $${total.toFixed(2)}`, 196, y, { align: 'right' })
+
+  doc.save(`Boleta_${nombreCliente.replace(/\s+/g, '_')}_${mesLabel}_${anio}.pdf`)
+}
 
 export default function Libreta() {
   const [clientes, setClientes] = useState([])
@@ -83,7 +128,6 @@ export default function Libreta() {
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
@@ -112,7 +156,6 @@ export default function Libreta() {
         </div>
       )}
 
-      {/* FORMULARIO NUEVO CLIENTE */}
       {mostrarForm && (
         <form
           onSubmit={crearCliente}
@@ -135,7 +178,6 @@ export default function Libreta() {
         </form>
       )}
 
-      {/* BUSCADOR */}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
         <input
@@ -147,7 +189,6 @@ export default function Libreta() {
         />
       </div>
 
-      {/* LISTA DE CLIENTES */}
       {cargando ? (
         <div className="text-center py-12 text-xs text-slate-400 font-medium">
           Cargando libreta...
@@ -208,6 +249,7 @@ function DetalleCliente({ cliente, onVolver }) {
   const [descripcion, setDescripcion] = useState('')
   const [monto, setMonto] = useState('')
   const [error, setError] = useState('')
+  const [mesSeleccionado, setMesSeleccionado] = useState(new Date().toISOString().slice(0, 7)) // 'YYYY-MM'
 
   const cargarDatos = async () => {
     setCargando(true)
@@ -266,23 +308,28 @@ function DetalleCliente({ cliente, onVolver }) {
     cargarDatos()
   }
 
+  // Solo los movimientos del mes que estás mirando en el calendario
+  const movimientosDelMes = movimientos.filter((m) => m.fecha?.slice(0, 7) === mesSeleccionado)
+  const [anioSel, mesSelNum] = mesSeleccionado.split('-').map(Number)
+  const mesLabel = MESES[mesSelNum - 1]
+
   const cerrarMes = async () => {
     setError('')
-    const pendientes = movimientos.filter((m) => !m.pagado)
-    if (pendientes.length === 0) {
-      setError('No hay movimientos pendientes para cerrar.')
+    const pendientesDelMes = movimientosDelMes.filter((m) => !m.pagado)
+
+    if (pendientesDelMes.length === 0) {
+      setError(`No hay movimientos pendientes de ${mesLabel} ${anioSel} para cerrar.`)
       return
     }
 
-    const total = pendientes.reduce((acc, m) => acc + Number(m.monto), 0)
-    const ahora = new Date()
+    const total = pendientesDelMes.reduce((acc, m) => acc + Number(m.monto), 0)
 
     const { error: errorResumen } = await supabase.from('libreta_resumenes_mensuales').insert({
       cliente_id: cliente.id,
-      mes: ahora.getMonth() + 1,
-      anio: ahora.getFullYear(),
+      mes: mesSelNum,
+      anio: anioSel,
       total,
-      cantidad_movimientos: pendientes.length,
+      cantidad_movimientos: pendientesDelMes.length,
     })
 
     if (errorResumen) {
@@ -290,19 +337,43 @@ function DetalleCliente({ cliente, onVolver }) {
       return
     }
 
-    const ids = pendientes.map((m) => m.id)
+    generarBoletaPDF({
+      nombreCliente: cliente.nombre,
+      mesLabel,
+      anio: anioSel,
+      items: pendientesDelMes,
+      total,
+    })
+
+    const ids = pendientesDelMes.map((m) => m.id)
     await supabase.from('libreta_movimientos').update({ pagado: true }).in('id', ids)
 
     cargarDatos()
   }
 
-  const saldoPendiente = movimientos
+  const descargarBoletaDeResumen = (resumen) => {
+    const itemsDelResumen = movimientos.filter(
+      (m) => m.fecha?.slice(0, 7) === `${resumen.anio}-${String(resumen.mes).padStart(2, '0')}`
+    )
+    generarBoletaPDF({
+      nombreCliente: cliente.nombre,
+      mesLabel: MESES[resumen.mes - 1],
+      anio: resumen.anio,
+      items: itemsDelResumen,
+      total: Number(resumen.total),
+    })
+  }
+
+  const saldoPendienteTotal = movimientos
+    .filter((m) => !m.pagado)
+    .reduce((acc, m) => acc + Number(m.monto), 0)
+
+  const saldoPendienteDelMes = movimientosDelMes
     .filter((m) => !m.pagado)
     .reduce((acc, m) => acc + Number(m.monto), 0)
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
-      {/* BOTÓN REGRESAR */}
       <button
         onClick={onVolver}
         className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-emerald-400 transition-colors py-1"
@@ -310,7 +381,6 @@ function DetalleCliente({ cliente, onVolver }) {
         <ArrowLeft size={16} /> Volver a Lista de Clientes
       </button>
 
-      {/* TARJETA RESUMEN CLIENTE */}
       <div className="bg-slate-800/80 border border-slate-700/60 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
@@ -320,14 +390,14 @@ function DetalleCliente({ cliente, onVolver }) {
         </div>
         <div className="sm:text-right bg-slate-900/60 p-4 rounded-2xl border border-slate-700/40">
           <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
-            Saldo Pendiente
+            Saldo Pendiente (total)
           </span>
           <p
             className={`text-3xl font-extrabold font-mono ${
-              saldoPendiente > 0 ? 'text-rose-400' : 'text-emerald-400'
+              saldoPendienteTotal > 0 ? 'text-rose-400' : 'text-emerald-400'
             }`}
           >
-            ${saldoPendiente.toFixed(2)}
+            ${saldoPendienteTotal.toFixed(2)}
           </p>
         </div>
       </div>
@@ -339,7 +409,24 @@ function DetalleCliente({ cliente, onVolver }) {
         </div>
       )}
 
-      {/* ACCIONES RÁPIDAS */}
+      {/* SELECTOR DE MES */}
+      <div className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div className="flex items-center gap-2">
+          <Calendar size={16} className="text-emerald-400 shrink-0" />
+          <span className="text-xs font-semibold text-slate-300">Viendo:</span>
+          <input
+            type="month"
+            value={mesSeleccionado}
+            onChange={(e) => setMesSeleccionado(e.target.value)}
+            className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-100 font-mono"
+          />
+        </div>
+        <span className="text-xs text-slate-400">
+          Pendiente de <span className="capitalize font-semibold text-slate-200">{mesLabel} {anioSel}</span>:{' '}
+          <span className="font-mono font-bold text-rose-400">${saldoPendienteDelMes.toFixed(2)}</span>
+        </span>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           onClick={() => setMostrarForm(!mostrarForm)}
@@ -352,12 +439,11 @@ function DetalleCliente({ cliente, onVolver }) {
           onClick={cerrarMes}
           className="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-2xl transition-all flex items-center justify-center gap-2 text-xs active:scale-95"
         >
-          <Calendar size={16} className="text-blue-400" />
-          Cerrar Mes / Generar Boleta
+          <Download size={16} className="text-blue-400" />
+          Cerrar {mesLabel} y Descargar Boleta
         </button>
       </div>
 
-      {/* FORMULARIO ANOTAR */}
       {mostrarForm && (
         <form
           onSubmit={agregarMovimiento}
@@ -400,20 +486,19 @@ function DetalleCliente({ cliente, onVolver }) {
         </form>
       )}
 
-      {/* DETALLE DE MOVIMIENTOS */}
       <div className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Histórico de Movimientos
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 capitalize">
+          Movimientos de {mesLabel} {anioSel}
         </h3>
         {cargando ? (
           <div className="text-center py-8 text-xs text-slate-400">Cargando movimientos...</div>
-        ) : movimientos.length === 0 ? (
+        ) : movimientosDelMes.length === 0 ? (
           <div className="bg-slate-800/20 border border-slate-700/30 rounded-2xl p-6 text-center text-xs text-slate-500">
-            Sin movimientos registrados aún.
+            Sin movimientos en este mes.
           </div>
         ) : (
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl divide-y divide-slate-700/40 overflow-hidden backdrop-blur-md">
-            {movimientos.map((m) => (
+            {movimientosDelMes.map((m) => (
               <div
                 key={m.id}
                 className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-800/30 transition-colors"
@@ -455,7 +540,6 @@ function DetalleCliente({ cliente, onVolver }) {
         )}
       </div>
 
-      {/* RESÚMENES MENSUALES */}
       {resumenes.length > 0 && (
         <div className="space-y-3 pt-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
@@ -463,11 +547,22 @@ function DetalleCliente({ cliente, onVolver }) {
           </h3>
           <div className="bg-slate-800/40 border border-slate-700/50 rounded-3xl divide-y divide-slate-700/40 overflow-hidden backdrop-blur-md">
             {resumenes.map((r) => (
-              <div key={r.id} className="p-4 flex justify-between items-center text-xs">
+              <div key={r.id} className="p-4 flex justify-between items-center text-xs gap-2">
                 <span className="text-slate-300 font-medium">
                   {MESES[r.mes - 1]} {r.anio} ({r.cantidad_movimientos} fiados)
                 </span>
-                <span className="font-mono font-bold text-emerald-400">${Number(r.total).toFixed(2)}</span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-mono font-bold text-emerald-400">
+                    ${Number(r.total).toFixed(2)}
+                  </span>
+                  <button
+                    onClick={() => descargarBoletaDeResumen(r)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10"
+                    title="Descargar boleta de este mes"
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
