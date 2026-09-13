@@ -1,104 +1,132 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Plus, Trash2, Clock, User, Play, Square, CheckCircle2 } from 'lucide-react'
+import { Calendar, Plus, Trash2, Clock, User, Play, Square } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { verificarLogroDiasTrabajados } from '../lib/logros'
+import LogroModal from './LogroModal'
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+const DIAS_MAP_JS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+function formatearDuracion(ms) {
+  const seg = Math.floor((ms / 1000) % 60).toString().padStart(2, '0')
+  const min = Math.floor((ms / (1000 * 60)) % 60).toString().padStart(2, '0')
+  const hrs = Math.floor(ms / (1000 * 60 * 60)).toString().padStart(2, '0')
+  return `${hrs}:${min}:${seg}`
+}
 
 export default function Turnos() {
   const [turnos, setTurnos] = useState([])
-  const [empleados, setEmpleados] = useState([])
+  const [perfiles, setPerfiles] = useState([])
+  const [asistenciasHoy, setAsistenciasHoy] = useState([])
+  const [usuarioActual, setUsuarioActual] = useState(null)
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [ahora, setAhora] = useState(new Date())
+  const [logroMensaje, setLogroMensaje] = useState('')
 
-  // Formulario
   const [dia, setDia] = useState('Lunes')
   const [horaInicio, setHoraInicio] = useState('09:00')
   const [horaFin, setHoraFin] = useState('13:00')
-  const [empleado, setEmpleado] = useState('')
+  const [empleadoId, setEmpleadoId] = useState('')
   const [notas, setNotas] = useState('')
 
-  // Reloj base para refrescar segundos
   useEffect(() => {
     const timer = setInterval(() => setAhora(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
 
   useEffect(() => {
-    cargarDatos()
+    supabase.auth.getUser().then(({ data: { user } }) => setUsuarioActual(user))
   }, [])
 
   const cargarDatos = async () => {
     setCargando(true)
-    const { data: turnosData } = await supabase.from('turnos').select('*').order('id', { ascending: true })
+
+    const { data: turnosData } = await supabase
+      .from('turnos')
+      .select('*, perfiles(nombre)')
+      .order('id', { ascending: true })
     if (turnosData) setTurnos(turnosData)
 
-    const { data: profilesData } = await supabase.from('perfiles').select('nombre').order('nombre')
-    
-    if (profilesData && profilesData.length > 0) {
-      const nombres = profilesData.map(p => p.nombre).filter(Boolean)
-      setEmpleados(nombres)
-      if (nombres.length > 0) setEmpleado(nombres[0])
-    } else {
-      const listaGenerica = ['Matías Toledo', 'Ariel', 'Zoe']
-      setEmpleados(listaGenerica)
-      setEmpleado(listaGenerica[0])
+    const { data: perfilesData } = await supabase
+      .from('perfiles')
+      .select('*')
+      .order('nombre', { ascending: true })
+    if (perfilesData) {
+      setPerfiles(perfilesData)
+      setEmpleadoId((prev) => prev || perfilesData[0]?.id || '')
     }
+
+    const hoyFecha = new Date().toISOString().slice(0, 10)
+    const { data: asistData } = await supabase
+      .from('asistencias')
+      .select('*')
+      .eq('tipo', 'fijo')
+      .eq('fecha', hoyFecha)
+    setAsistenciasHoy(asistData || [])
 
     setCargando(false)
   }
 
-  // Identificar el día actual
-  const diasMap = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
-  const diaActualNombre = diasMap[ahora.getDay()]
+  useEffect(() => {
+    cargarDatos()
+  }, [])
 
-  // Buscar si hay un turno programado para HOY que esté en curso o activo
-  const turnoHoy = turnos.find(t => t.dia === diaActualNombre && t.estado !== 'finalizado')
-  const turnoEnCurso = turnos.find(t => t.dia === diaActualNombre && t.estado === 'en_curso')
+  const diaActualNombre = DIAS_MAP_JS[ahora.getDay()]
+  const asistenciaDe = (idEmpleado) => asistenciasHoy.find((a) => a.empleado_id === idEmpleado)
 
-  // Iniciar Cronómetro en Tiempo Real
-  const handleIniciarJornada = async (idTurno) => {
-    const horaInicioISO = new Date().toISOString()
-    const { error } = await supabase
-      .from('turnos')
-      .update({ estado: 'en_curso', inicio_real: horaInicioISO })
-      .eq('id', idTurno)
+  const misTurnosHoy = turnos.filter(
+    (t) => t.dia === diaActualNombre && t.empleado_id === usuarioActual?.id
+  )
+  const miAsistenciaHoy = usuarioActual ? asistenciaDe(usuarioActual.id) : null
+  const miTurnoEnCurso = miAsistenciaHoy && !miAsistenciaHoy.hora_fin
+  const turnoParaIniciar = misTurnosHoy[0]
 
-    if (!error) cargarDatos()
+  const iniciarJornada = async (turno) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const hoyFecha = new Date().toISOString().slice(0, 10)
+
+    await supabase.from('asistencias').insert({
+      empleado_id: user.id,
+      tipo: 'fijo',
+      fecha: hoyFecha,
+      hora_inicio: new Date().toISOString(),
+      turno_id: turno.id,
+    })
+
+    cargarDatos()
   }
 
-  // Finalizar Cronómetro
-  const handleFinalizarJornada = async (idTurno) => {
-    const horaFinISO = new Date().toISOString()
-    const { error } = await supabase
-      .from('turnos')
-      .update({ estado: 'finalizado', fin_real: horaFinISO })
-      .eq('id', idTurno)
+  const finalizarJornada = async () => {
+    if (!miAsistenciaHoy) return
 
-    if (!error) cargarDatos()
-  }
+    const { error: errorRpc } = await supabase.rpc('finalizar_turno_fijo', {
+      p_asistencia_id: miAsistenciaHoy.id,
+    })
 
-  // Formatear el tiempo transcurrido (Cronómetro)
-  const calcularTiempoTranscurrido = (inicioISO) => {
-    if (!inicioISO) return '00:00:00'
-    const inicio = new Date(inicioISO)
-    const diffMs = Math.max(0, ahora - inicio)
+    if (errorRpc) {
+      alert('No se pudo finalizar el turno: ' + errorRpc.message)
+      return
+    }
 
-    const seg = Math.floor((diffMs / 1000) % 60).toString().padStart(2, '0')
-    const min = Math.floor((diffMs / (1000 * 60)) % 60).toString().padStart(2, '0')
-    const hrs = Math.floor(diffMs / (1000 * 60 * 60)).toString().padStart(2, '0')
+    const { data: { user } } = await supabase.auth.getUser()
+    const nombre = user.user_metadata?.nombre || user.email
+    const msg = await verificarLogroDiasTrabajados(user.id, nombre)
+    if (msg) setLogroMensaje(msg)
 
-    return `${hrs}:${min}:${seg}`
+    cargarDatos()
   }
 
   const handleCrearTurno = async (e) => {
     e.preventDefault()
+    const empleadoNombre = perfiles.find((p) => p.id === empleadoId)?.nombre || ''
+
     const { error } = await supabase.from('turnos').insert({
       dia,
       hora_inicio: horaInicio,
       hora_fin: horaFin,
-      empleado,
-      estado: 'pendiente',
+      empleado_id: empleadoId,
+      empleado: empleadoNombre,
       notas: notas.trim() || null,
     })
 
@@ -117,7 +145,6 @@ export default function Turnos() {
 
   return (
     <div className="space-y-6 pb-20 lg:pb-6">
-      {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2.5">
@@ -139,60 +166,57 @@ export default function Turnos() {
         </button>
       </div>
 
-      {/* WIDGET CRONÓMETRO DE JORNADA EN TIEMPO REAL */}
       <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-emerald-500/30 p-5 rounded-3xl shadow-xl space-y-4">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="space-y-1 text-center sm:text-left">
             <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-emerald-400 flex items-center justify-center sm:justify-start gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${turnoEnCurso ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`} />
-              {turnoEnCurso ? 'JORNADA EN CURSO' : 'CONTROL DE JORNADA'}
+              <span className={`w-2 h-2 rounded-full ${miTurnoEnCurso ? 'bg-emerald-400 animate-ping' : 'bg-slate-600'}`} />
+              {miTurnoEnCurso ? 'TU JORNADA EN CURSO' : 'CONTROL DE JORNADA'}
             </span>
             <p className="text-xs text-slate-300 font-medium">
               Hoy es <span className="font-bold text-slate-100">{diaActualNombre}</span>
-              {turnoHoy && ` — Encargado: ${turnoHoy.empleado}`}
             </p>
           </div>
 
-          {/* CRONÓMETRO O RELOJ */}
           <div className="bg-slate-950 border border-slate-800 px-6 py-3 rounded-2xl text-center shadow-inner">
             <span className="font-mono text-3xl font-extrabold text-emerald-400 tracking-wider">
-              {turnoEnCurso
-                ? calcularTiempoTranscurrido(turnoEnCurso.inicio_real)
+              {miTurnoEnCurso
+                ? formatearDuracion(ahora - new Date(miAsistenciaHoy.hora_inicio))
                 : ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
             <p className="text-[9px] font-mono text-slate-500 uppercase mt-0.5">
-              {turnoEnCurso ? 'Tiempo de Trabajo Transcurrido' : 'Hora Actual'}
+              {miTurnoEnCurso ? 'Tiempo de Trabajo Transcurrido' : 'Hora Actual'}
             </p>
           </div>
         </div>
 
-        {/* BOTÓN MANUAL DE INICIAR / FINALIZAR CRONÓMETRO */}
-        {turnoHoy ? (
-          <div className="pt-2 border-t border-slate-800/80">
-            {turnoHoy.estado === 'en_curso' ? (
-              <button
-                onClick={() => handleFinalizarJornada(turnoHoy.id)}
-                className="w-full py-3.5 bg-rose-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-rose-500/10 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-              >
-                <Square size={16} className="fill-slate-950" /> FINALIZAR TURNO
-              </button>
-            ) : (
-              <button
-                onClick={() => handleIniciarJornada(turnoHoy.id)}
-                className="w-full py-3.5 bg-emerald-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-              >
-                <Play size={16} className="fill-slate-950" /> INICIAR TURNO DE HOY ({turnoHoy.hora_inicio} hs)
-              </button>
-            )}
-          </div>
-        ) : (
-          <p className="text-center text-[11px] text-slate-500 italic pt-1">
-            No hay turnos agendados para comenzar el día de hoy ({diaActualNombre}).
-          </p>
-        )}
+        <div className="pt-2 border-t border-slate-800/80">
+          {miAsistenciaHoy && !miTurnoEnCurso ? (
+            <p className="text-center text-[11px] text-emerald-400 font-semibold py-2">
+              Ya completaste tu turno de hoy ✓
+            </p>
+          ) : miTurnoEnCurso ? (
+            <button
+              onClick={finalizarJornada}
+              className="w-full py-3.5 bg-rose-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-rose-500/10 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+            >
+              <Square size={16} className="fill-slate-950" /> FINALIZAR TURNO
+            </button>
+          ) : turnoParaIniciar ? (
+            <button
+              onClick={() => iniciarJornada(turnoParaIniciar)}
+              className="w-full py-3.5 bg-emerald-500 text-slate-950 font-extrabold text-xs rounded-2xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+            >
+              <Play size={16} className="fill-slate-950" /> INICIAR TURNO DE HOY ({turnoParaIniciar.hora_inicio} hs)
+            </button>
+          ) : (
+            <p className="text-center text-[11px] text-slate-500 italic pt-1">
+              No tenés un turno agendado para hoy ({diaActualNombre}).
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* FORMULARIO AGENDAR TURNO */}
       {mostrarForm && (
         <form onSubmit={handleCrearTurno} className="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -204,8 +228,8 @@ export default function Turnos() {
             </div>
             <div>
               <label className="text-[11px] font-semibold text-slate-400 uppercase">Empleado</label>
-              <select value={empleado} onChange={(e) => setEmpleado(e.target.value)} className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100">
-                {empleados.map((emp) => <option key={emp} value={emp}>{emp}</option>)}
+              <select value={empleadoId} onChange={(e) => setEmpleadoId(e.target.value)} className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-100">
+                {perfiles.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
               </select>
             </div>
             <div>
@@ -223,7 +247,6 @@ export default function Turnos() {
         </form>
       )}
 
-      {/* HORARIOS SEMANALES PROGRAMADOS */}
       <div className="space-y-4">
         {DIAS_SEMANA.map((diaNombre) => {
           const turnosDelDia = turnos.filter((t) => t.dia === diaNombre)
@@ -256,36 +279,43 @@ export default function Turnos() {
                 <p className="text-xs text-slate-600 italic py-1">Sin turnos asignados para este día.</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {turnosDelDia.map((t) => (
-                    <div key={t.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex justify-between items-center gap-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-100">
-                          <User size={13} className="text-emerald-400" />
-                          <span>{t.empleado}</span>
-                          {t.estado === 'en_curso' && (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">En curso</span>
-                          )}
-                          {t.estado === 'finalizado' && (
-                            <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">Completado</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
-                          <Clock size={12} className="text-slate-500" />
-                          <span>{t.hora_inicio} hs - {t.hora_fin} hs</span>
-                        </div>
-                      </div>
+                  {turnosDelDia.map((t) => {
+                    const asistencia = esHoy ? asistenciaDe(t.empleado_id) : null
+                    const estadoHoy = !asistencia ? null : asistencia.hora_fin ? 'completado' : 'en_curso'
 
-                      <button onClick={() => handleEliminarTurno(t.id)} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl">
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
+                    return (
+                      <div key={t.id} className="bg-slate-950/80 border border-slate-800 rounded-xl p-3 flex justify-between items-center gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-100">
+                            <User size={13} className="text-emerald-400" />
+                            <span>{t.perfiles?.nombre || t.empleado}</span>
+                            {estadoHoy === 'en_curso' && (
+                              <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/30 font-bold">En curso</span>
+                            )}
+                            {estadoHoy === 'completado' && (
+                              <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">Completado</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
+                            <Clock size={12} className="text-slate-500" />
+                            <span>{t.hora_inicio} hs - {t.hora_fin} hs</span>
+                          </div>
+                        </div>
+
+                        <button onClick={() => handleEliminarTurno(t.id)} className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
           )
         })}
       </div>
+
+      {logroMensaje && <LogroModal mensaje={logroMensaje} onCerrar={() => setLogroMensaje('')} />}
     </div>
   )
 }
