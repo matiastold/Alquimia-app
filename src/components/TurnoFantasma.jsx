@@ -3,6 +3,7 @@ import { Ghost, Trash2, Plus, X, UserCheck, AlertCircle, Clock, ShieldAlert } fr
 import { supabase } from '../lib/supabaseClient'
 import { verificarLogroDiasTrabajados } from '../lib/logros'
 import LogroModal from './LogroModal'
+import { useEsAdmin } from '../lib/useEsAdmin'
 
 function formatearDuracion(segundos) {
   const h = Math.floor(segundos / 3600)
@@ -12,6 +13,7 @@ function formatearDuracion(segundos) {
 }
 
 export default function TurnoFantasma() {
+  const esAdmin = useEsAdmin()
   const [turnos, setTurnos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -269,7 +271,7 @@ export default function TurnoFantasma() {
                       </p>
                     )}
                   </div>
-
+                  {esAdmin &&(
                   <button
                     onClick={() => eliminarTurno(t)}
                     className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition-all shrink-0"
@@ -277,6 +279,8 @@ export default function TurnoFantasma() {
                   >
                     <Trash2 size={16} />
                   </button>
+                  )}
+
                 </div>
 
                 {/* Acciones del Turno Fantasma */}
