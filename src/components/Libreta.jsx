@@ -12,46 +12,100 @@ const MESES = [
 
 function generarBoletaPDF({ nombreCliente, mesLabel, anio, items, total }) {
   const doc = new jsPDF()
+  const emerald = [16, 185, 129]
+  const slateDark = [15, 23, 42]
+  const slateGray = [100, 116, 139]
+  const slateLight = [241, 245, 249]
 
-  doc.setFontSize(18)
-  doc.text('Alquimia', 14, 20)
-  doc.setFontSize(11)
-  doc.text(`Boleta de cuenta — ${mesLabel} ${anio}`, 14, 28)
-  doc.text(`Cliente: ${nombreCliente}`, 14, 36)
+  const margenIzq = 14
+  const margenDer = 196
 
-  let y = 48
+  // Emblema de la marca: triángulo + rombo, igual que el logo de la app
+  const cx = margenIzq + 6
+  const cyTri = 22
+  doc.setDrawColor(...emerald)
+  doc.setLineWidth(0.6)
+  doc.triangle(cx, cyTri - 6, cx - 5.2, cyTri + 4, cx + 5.2, cyTri + 4, 'S')
+  doc.setFillColor(...emerald)
+  const r = 2.3
+  doc.lines([[r, r], [-r, r], [-r, -r]], cx, cyTri + 2 - r, [1, 1], 'F', true)
+
+  doc.setTextColor(...slateDark)
+  doc.setFont(undefined, 'bold')
+  doc.setFontSize(16)
+  doc.text('ALQUIMIA', cx + 12, cyTri - 1)
+  doc.setFont(undefined, 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...slateGray)
+  doc.text('Boleta de cuenta corriente', cx + 12, cyTri + 5)
+
+  doc.setDrawColor(...emerald)
+  doc.setLineWidth(0.8)
+  doc.line(margenIzq, 32, margenDer, 32)
+
+  doc.setFontSize(10)
+  doc.setTextColor(...slateDark)
+  doc.setFont(undefined, 'bold')
+  doc.text(`Cliente: ${nombreCliente}`, margenIzq, 42)
+  doc.setFont(undefined, 'normal')
+  doc.setTextColor(...slateGray)
+  doc.text(`Período: ${mesLabel} ${anio}`, margenIzq, 48)
+  doc.text(`Emitida: ${new Date().toLocaleDateString('es-AR')}`, margenIzq, 53)
+
+  let y = 63
+  doc.setFillColor(...slateDark)
+  doc.rect(margenIzq, y - 5, margenDer - margenIzq, 8, 'F')
+  doc.setTextColor(255, 255, 255)
   doc.setFontSize(9)
   doc.setFont(undefined, 'bold')
-  doc.text('Fecha', 14, y)
-  doc.text('Detalle', 45, y)
-  doc.text('Monto', 196, y, { align: 'right' })
-  doc.setFont(undefined, 'normal')
-  y += 4
-  doc.line(14, y, 196, y)
-  y += 6
+  doc.text('FECHA', margenIzq + 2, y)
+  doc.text('DETALLE', margenIzq + 32, y)
+  doc.text('MONTO', margenDer - 2, y, { align: 'right' })
+  y += 8
 
-  items.forEach((m) => {
+  doc.setFont(undefined, 'normal')
+  doc.setFontSize(9)
+
+  items.forEach((m, i) => {
     if (y > 275) {
       doc.addPage()
       y = 20
     }
-    doc.text(m.fecha, 14, y)
-    const desc = m.descripcion.length > 60 ? m.descripcion.slice(0, 57) + '...' : m.descripcion
-    doc.text(desc, 45, y)
-    doc.text(`$${Number(m.monto).toFixed(2)}`, 196, y, { align: 'right' })
+    if (i % 2 === 0) {
+      doc.setFillColor(...slateLight)
+      doc.rect(margenIzq, y - 4.5, margenDer - margenIzq, 7, 'F')
+    }
+    doc.setTextColor(...slateGray)
+    doc.text(m.fecha, margenIzq + 2, y)
+    doc.setTextColor(...slateDark)
+    const desc = m.descripcion.length > 55 ? m.descripcion.slice(0, 52) + '...' : m.descripcion
+    doc.text(desc, margenIzq + 32, y)
+    doc.text(`$${Number(m.monto).toFixed(2)}`, margenDer - 2, y, { align: 'right' })
     y += 7
   })
 
-  y += 3
-  doc.line(14, y, 196, y)
-  y += 9
-  doc.setFontSize(13)
+  y += 4
+  doc.setDrawColor(...slateGray)
+  doc.setLineWidth(0.3)
+  doc.line(margenIzq, y, margenDer, y)
+  y += 10
+
+  doc.setFillColor(...emerald)
+  doc.roundedRect(margenIzq, y - 7, margenDer - margenIzq, 12, 2, 2, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(12)
   doc.setFont(undefined, 'bold')
-  doc.text(`Total a abonar: $${total.toFixed(2)}`, 196, y, { align: 'right' })
+  doc.text('TOTAL A ABONAR', margenIzq + 4, y)
+  doc.text(`$${total.toFixed(2)}`, margenDer - 4, y, { align: 'right' })
+
+  y += 18
+  doc.setFont(undefined, 'normal')
+  doc.setFontSize(8)
+  doc.setTextColor(...slateGray)
+  doc.text('Gracias por tu confianza. Cualquier consulta sobre esta cuenta, acercate a Alquimia.', margenIzq, y)
 
   doc.save(`Boleta_${nombreCliente.replace(/\s+/g, '_')}_${mesLabel}_${anio}.pdf`)
 }
-
 export default function Libreta() {
   const [clientes, setClientes] = useState([])
   const [saldos, setSaldos] = useState({})
