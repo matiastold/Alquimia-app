@@ -300,7 +300,7 @@ Además hay **funciones SQL** que finalizan los cronómetros usando el reloj del
 
 ```bash
 # 1. Clonar e instalar dependencias
-git clone https://github.com/<tu-usuario>/alquimia-app.git
+git clone https://github.com/matiastold/alquimia-app.git
 cd alquimia-app
 npm install
 
